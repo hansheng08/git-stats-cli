@@ -1,9 +1,9 @@
 # git-stats-cli 產品需求規格（PRD）
 
 - 文件擁有者：PM
-- 版本：v1.0（定稿，G1 已於 2026-11-21 通過）
-- 最後更新：2026-11-21
-- 相關交接單：PRD-001
+- 版本：v1.1（G1 已於 2026-11-21 通過；v1.1 補充 G2 決定，2026-11-22）
+- 最後更新：2026-11-22
+- 相關交接單：PRD-001、PRD-002
 
 > 名詞說明（第一次出現時的白話解釋）
 > - **CLI**（Command Line Interface，命令列介面）：在終端機輸入指令來使用的程式，沒有圖形介面。
@@ -44,7 +44,7 @@
 | # | 指標 | 目標值 | 量測方式 |
 |---|------|--------|----------|
 | M1 | 統計正確率 | 100%：在測試用 fixture repo（預先建好、結果已知的測試 repo）上，每位作者的 commit 數、新增行數、刪除行數全部與預期值一致 | 自動化測試（QA 在 TEST_PLAN 定義 fixture） |
-| M2 | 安裝到第一次出結果的時間 | Windows、macOS、Linux 三平台各 ≤ 5 分鐘（依 README 操作，從零開始） | G4 前由老闆或 QA 各平台實測一次並記錄時間 |
+| M2 | 安裝到第一次出結果的時間 | Windows、macOS、Linux 三平台各 ≤ 5 分鐘（依 README 操作，從零開始；**不含安裝 Git 的時間**，計時起點為已安裝 Git 的機器，已定案，2026-11-22 老闆於 G2 核准，見 P-02） | G4 前由老闆或 QA 各平台實測一次並記錄時間 |
 | M3 | 真實使用驗證 | 發佈後 2 週內，老闆在 ≥ 1 個真實 repo 使用，隨機抽 3 位作者以 `git log` 手動核對，數字 100% 一致 | 老闆回報 |
 | M4 | 驗收標準通過率 | 本 PRD 所有 Must 等級 AC 100% 通過 | QA_REPORT |
 
@@ -137,6 +137,17 @@
   Given 一個 repo 目前在 main 分支，另有未合併的分支 feature 上有作者 C 在期間內的 2 個 commit
   When 執行統計
   Then 輸出中不包含作者 C 在 feature 分支上的那 2 個 commit。
+
+- **AC-40 明確忽略 `.mailmap`（已定案，2026-11-22 老闆於 G2 核准，見 P-03）**
+  Given 一個 fixture repo，期間內有 commit 的 email 為 old@example.com 與 new@example.com，且 repo 根目錄有 `.mailmap` 把 old@example.com 對應到 new@example.com（並改名）
+  When 執行統計
+  Then 輸出中 old@example.com 與 new@example.com 各自一列，名字與 email 皆取自 commit 原始紀錄，不受 `.mailmap` 影響；刪除 `.mailmap` 後再執行，輸出逐位元組相同。
+  > 文件需求（非本 AC 驗收範圍）：README 必須說明本工具忽略 `.mailmap`，因此結果可能與 `git shortlog`（預設會套用 `.mailmap`）不同。README 不由 PM 擁有，請幕僚長轉交負責角色。
+
+- **AC-41 detached HEAD 照常統計（已定案，2026-11-22 老闆於 G2 核准，見 P-04）**
+  Given 一個 fixture repo 處於 detached HEAD 狀態（HEAD 直接指向某個 commit X，而不是分支）
+  When 執行統計
+  Then exit code 為 0，統計範圍為 X 可追溯到的 commit（與 AC-09 規則相同）：結果與「在指向 X 的分支上執行」完全相同。
 
 ### F2 日期範圍（Must）
 
@@ -235,6 +246,16 @@
   When 加上 `--output report.csv` 以 CSV 格式執行統計
   Then 產生 `report.csv`，內容與 AC-22～AC-24 規定的 stdout 輸出逐位元組（byte）相同；若檔案已存在則覆寫；stdout 不輸出 CSV 內容；exit code 為 0。（目的：避免 Windows PowerShell 用 `>` 導出時自動轉成 UTF-16 編碼。）
 
+- **AC-43 CSV 換行固定為 LF（已定案，2026-11-22 老闆於 G2 核准，見 P-05）**
+  Given 任一有資料的 repo，在 Windows、macOS、Linux 上分別執行
+  When 以 CSV 格式執行統計（輸出到 stdout，或依 AC-26 用 `--output` 寫檔）
+  Then 每一行（含表頭與最後一行）都以 LF（`\n`，位元組 0x0A）結尾，輸出中不含任何 CR（`\r`，位元組 0x0D）字元（欄位值本身含 CR 者除外）；三平台輸出逐位元組相同。
+
+- **AC-44 CSV 不處理試算表公式字元，原樣輸出（已定案，2026-11-22 老闆於 G2 核准，見 P-06）**
+  Given 作者名字為 `=1+1`、`+cmd`、`-x`、`@SUM(A1)`（以 `=`、`+`、`-`、`@` 開頭）
+  When 以 CSV 格式執行統計
+  Then 這些值原樣輸出，不加前置單引號、空白或其他字元（只依 AC-23 的規則加引號跳脫）；用標準 CSV 解析器讀回後與原始值完全一致。已知風險見 7.3 R-01。
+
 ### F5 輸入檢查、錯誤處理與基本指令行為（Must）
 
 **User Story**：身為在腳本中使用本工具的開發者，我想在輸入有誤時得到清楚的訊息和固定的 exit code，以便腳本能正確判斷成功或失敗。
@@ -279,15 +300,25 @@
   When 執行 `git-stats --version`
   Then stdout 顯示版本號（例如 `0.1.0`），與該版本 GitHub Release 的 tag（例如 `v0.1.0`）去掉開頭 `v` 後一致；exit code 為 0。
 
-- **AC-35 唯讀，不修改 repo**
+- **AC-35 唯讀，不修改 repo（v1.1 修改範圍，已定案，2026-11-22 老闆於 G2 核准，見 P-07）**
   Given 一個 fixture repo，執行前記錄 `git status --porcelain` 輸出、所有 refs（`git for-each-ref` 輸出）與 `.git/config` 內容
-  When 以任意合法參數執行統計（含成功與查無資料兩種情況）
-  Then 執行後三者與執行前完全相同。
+  When 以任意合法參數執行統計（含成功與查無資料兩種情況），且未使用 `--output`，或 `--output` 指向 repo 以外的路徑
+  Then 執行後三者與執行前完全相同。（v1.1 修改，已定案，2026-11-22 老闆於 G2 核准，見 P-07：`--output` 指向 repo 內時，新檔案必然改變 `git status`，不在本 AC 範圍內。）
 
 - **AC-36 錯誤與結果分流**
   Given 任一會報錯的情況（AC-13～AC-16、AC-27、AC-28、AC-31、AC-32）
   When 執行並把 stdout 導向檔案
   Then 該檔案為空，錯誤訊息只出現在 stderr；成功執行時 stderr 為空。
+
+- **AC-39 找不到 Git 或 Git 版本過舊（已定案，2026-11-22 老闆於 G2 核准，見 P-01）**
+  Given 執行環境的 PATH 中找不到 `git`，或找到的 `git` 版本低於 2.34
+  When 以合法參數執行統計
+  Then stderr 顯示錯誤訊息，說明原因（找不到 Git／目前版本與最低需求 2.34）並提示如何安裝或升級 Git；stdout 無輸出；exit code 為 1。
+
+- **AC-42 bare repo 視為不是 Git repo（已定案，2026-11-22 老闆於 G2 核准，見 P-04）**
+  Given 一個 bare repo（以 `git init --bare` 或 `git clone --bare` 建立、沒有工作目錄的 repo）
+  When 以該路徑執行統計
+  Then 行為同 AC-28：stderr 顯示「不是 Git repo」類型的錯誤訊息並包含該路徑，stdout 無輸出，exit code 為 1。
 
 ### F6 安裝與發佈（Must）
 
@@ -302,6 +333,11 @@
   Given 某一版本準備發佈
   When 查看 GitHub repo 的 Releases 頁面
   Then 有對應的 tag（格式 `vX.Y.Z`）與 Release，Release 說明包含該版本的變更摘要與三平台安裝方式；不在 PyPI、npm 上架。
+
+- **AC-45 Release 產物平台：含 linux/arm64，不含 windows/arm64（已定案，2026-11-22 老闆於 G2 核准，見 P-08）**
+  Given 某一版本的 GitHub Release 已發佈
+  When 列出該 Release 的下載檔案
+  Then 除 AC-37 三平台所需的產物外，另包含 Linux arm64 的執行檔壓縮檔；不包含 Windows arm64 的產物。
 
 ### AC 總覽
 
@@ -341,10 +377,17 @@
 | AC-32 | 未知的輸出格式 | Must | |
 | AC-33 | 說明 | Must | |
 | AC-34 | 版本 | Must | |
-| AC-35 | 唯讀，不修改 repo | Must | |
+| AC-35 | 唯讀，不修改 repo（v1.1 限定範圍） | Must | P-07（G2） |
 | AC-36 | 錯誤與結果分流 | Must | |
 | AC-37 | 跨平台單一指令安裝 | Must | |
 | AC-38 | GitHub Release 發佈 | Must | |
+| AC-39 | 找不到 Git 或版本過舊 | Must | P-01（G2） |
+| AC-40 | 明確忽略 `.mailmap` | Must | P-03（G2） |
+| AC-41 | detached HEAD 照常統計 | Must | P-04（G2） |
+| AC-42 | bare repo 視為不是 Git repo | Must | P-04（G2） |
+| AC-43 | CSV 換行固定為 LF | Must | P-05（G2） |
+| AC-44 | CSV 公式字元原樣輸出 | Must | P-06（G2） |
+| AC-45 | Release 含 linux/arm64、不含 windows/arm64 | Must | P-08（G2） |
 
 所有錯誤情況的 exit code 均依第 5 節開頭的約定（已定案，2026-11-21 老闆於 G1 核准，見 Q-07）。
 
@@ -360,6 +403,10 @@
 | NFR-06 | 可用性 | 所有錯誤訊息包含「出了什麼錯」與「怎麼修正」（例如正確日期格式）；錯誤訊息語言為英文（已定案，2026-11-21 老闆於 G1 核准，見 Q-15） | AC-13～AC-16、AC-27、AC-28、AC-31、AC-32 |
 | NFR-07 | 相容性 | 名字或 email 含 UTF-8 非 ASCII 字元（中文、日文、emoji）時，統計與輸出不出錯、不亂碼 | fixture 含中文與 emoji 作者 |
 | NFR-08 | 資料保存 | 工具本身不保存任何資料或快取檔案；只在使用者指定 `--output` 時寫入該檔案 | 執行前後比對使用者家目錄與暫存目錄無新增本工具檔案 |
+
+**NFR 判定條件（已定案，2026-11-22 老闆於 G2 核准）**
+- **效能量測條件（D-02）**：NFR-01、NFR-02 等效能需求只以 warm cache（熱快取：同一 repo 已被讀取過、檔案已在作業系統快取中）的量測結果判定是否通過；cold cache（冷快取）結果不列入通過與否的判定。
+- **違反時的嚴重度（D-22）**：安全類 NFR（NFR-04、NFR-05）未通過＝「致命」；效能類（NFR-01、NFR-02）與平台類（NFR-03）未通過＝「高」。
 
 ## 7. 假設與待決問題
 
@@ -391,9 +438,15 @@
 | Q-15 | 錯誤訊息與表頭用英文還是中文？ | 英文（CLI 慣例、跨平台終端機不怕亂碼）；CSV 表頭固定英文以利程式讀取 | NFR-06、AC-22 | 已定案（2026-11-21 G1） |
 | Q-16 | 指令名稱用什麼？ | `git-stats`（簡短好記；若與現有工具撞名，由 Architect 提替代名稱） | 全部 | 已定案（2026-11-21 G1） |
 
+### 7.3 已知風險
+| # | 風險 | 處理 |
+|---|------|------|
+| R-01 | CSV 公式注入：作者名字若以 `=`、`+`、`-`、`@` 開頭，用 Excel 等試算表開啟 CSV 時可能被當成公式執行 | 已定案，2026-11-22 老闆於 G2 核准（P-06）：不跳脫、原樣輸出（AC-44），以維持 AC-23「讀回與原值完全一致」；使用者應以匯入方式開啟不受信任的 CSV。列為已接受風險 |
+
 ## 8. 變更紀錄
 
 | 版本 | 日期 | 作者 | 變更內容 |
 |------|------|------|----------|
 | v0.1 | 2026-11-21 | PM | 初版草稿（交接單 PRD-001）：AC-01～AC-38、NFR-01～NFR-08、待決問題 Q-01～Q-16。待 G1 審查。 |
 | v1.0 | 2026-11-21 | PM | 定稿：G1 通過（老闆 2026-11-21 23:59 核准）。Q-01～Q-16 全數採用建議答案（含 Q-12：維持 UTF-8、不加 BOM），相關「假設」標記改為「已定案」。AC 內容未變更。 |
+| v1.1 | 2026-11-22 | PM | 交接單 PRD-002：納入 G2 決定（老闆 2026-11-22 00:44 核准 ARCHITECTURE.md §18 P-01～P-08 與 QA D-22、D-02）。新增 AC-39～AC-45；修改 AC-35（限定為未使用 `--output` 或 `--output` 指向 repo 外，P-07）；修改 M2（不含安裝 Git 時間，P-02）；第 6 節新增 NFR 判定條件（D-02 warm cache、D-22 嚴重度）；新增 7.3 已知風險 R-01（CSV 公式注入，P-06）。其他 AC 內容未變更。 |
