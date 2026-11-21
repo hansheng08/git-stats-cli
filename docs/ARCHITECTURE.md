@@ -1,10 +1,10 @@
 # git-stats-cli 架構文件（ARCHITECTURE）
 
 - 文件擁有者：Architect
-- 版本：v1.0（G2 已於 2026-11-22 00:44 由老闆核准：採用 Go＋git CLI＋GoReleaser、指令名 `git-stats`、不做程式碼簽章；§12.1 於同日補齊）
+- 版本：v1.1（G2 已於 2026-11-22 00:44 由老闆核准：採用 Go＋git CLI＋GoReleaser、指令名 `git-stats`、不做程式碼簽章；v1.1 依 ARCH-002 與 TEST_PLAN v0.2 對齊，技術選擇不變）
 - 最後更新：2026-11-22
-- 相關交接單：ARCH-001（v0.1）、G2 後交接單（v1.0）；PoC：[A-001](tasks/A-001.md)
-- 依據：docs/PRD.md v1.1（commit f5dbf86，AC-01～AC-45、NFR-01～NFR-08）
+- 相關交接單：ARCH-001（v0.1）、G2 後交接單（v1.0）、ARCH-002（v1.1）；PoC：[A-001](tasks/A-001.md)
+- 依據：docs/PRD.md v1.2（commit 8b5d669，AC-01～AC-45、NFR-01～NFR-08；v1.2 只補 NFR 優先度與 D-02／D-22b 說明，AC 內容與 v1.1 相同，§16 對照不需變動）；docs/TEST_PLAN.md v0.2（commit c6879c5；§14 S-01～S-09 在 v0.3.1／dd68c80 未變動）
 - 相關 ADR：[ADR-001 語言與技術棧](adr/ADR-001-language-and-stack.md)、[ADR-002 Git 資料取得方式](adr/ADR-002-git-data-access.md)、[ADR-003 發佈與安裝](adr/ADR-003-distribution-and-install.md)、[ADR-004 模組邊界與自動強制](adr/ADR-004-module-boundaries-enforcement.md)
 
 > 名詞說明（第一次出現時的白話解釋；PRD 已解釋過的 CLI、commit、AC、exit code、stdout/stderr 等不再重複）
@@ -81,7 +81,10 @@ git-stats --version
 - 同一旗標重複出現：以最後一次為準（pflag 預設行為）。
 - 位置參數 0 個 → AC-31；超過 1 個 → 使用方式錯誤 exit 2。
 - `--format` 的值區分大小寫（`CSV` 視為未知格式，exit 2）。
-- 未知旗標一律 exit 2，即使同時有 `--help`（`--help --bogus` → 2）；`--help` 搭配錯誤的旗標「值」（例如 `--format json`）仍 exit 0，因為值的檢查在 `--help` 之後。
+- 未知旗標一律 exit 2，即使同時有 `--help`（`--help --bogus` 與 `--bogus --help` 都 → 2）；`--help` 搭配錯誤的旗標「值」（例如 `--format json`）仍 exit 0，因為值的檢查在 `--help` 之後。
+- **實作要求（確保上一條與順序無關）**：`--help`／`-h` 與 `--version` 必須在 pflag 中**明確定義為布林旗標**。已查 pflag 原始碼（`flag.go` 的 `parseLongArg`）：未定義 `help` 時，pflag 一遇到 `--help` 就回傳 `ErrHelp` 並**停止解析**，`--help --bogus` 會變成 exit 0、`--bogus --help` 變成 exit 2，結果取決於順序。明確定義後，pflag 會解析完全部參數，未知旗標一律先報錯。
+- **`--help` 與 `--version` 同時出現（D-18b）**：不論順序，`--help` 優先——stdout 印用法、exit 0，不印版本號。
+- **旗標缺值（D-18b）**：需要值的旗標（`--since`、`--until`、`--format`、`--output`）以 `--flag value` 形式出現時，**下一個參數一律被當作值，即使它以 `-` 開頭**（pflag 行為，已查原始碼）。因此 `--since --help` 會把 `--help` 當成起日的值，**不會**觸發說明；之後依「驗證順序」報使用方式錯誤（本例缺 `--until` 或日期格式錯誤）→ exit 2，stderr 訊息含 `"--help"` 這個值。需要值的旗標出現在最後、沒有下一個參數（例如 `git-stats . --since`）→ 旗標解析錯誤 → exit 2。`--since=`（空值）→ 日期格式錯誤 → exit 2。
 - 不提供短旗標（除 `-h`）、不提供設定檔、不讀取任何環境變數作為選項（`TZ` 除外，由 Go 標準庫讀取）。
 
 **驗證順序（決定多個錯誤同時發生時回報哪一個）**
@@ -154,9 +157,10 @@ git -C <repo> --no-pager -c core.quotepath=off log HEAD \
 | `internal/model` | 共用資料型別（無邏輯或只有極簡方法） | 無（只用標準庫） | import 任何 internal package |
 | `internal/apperr` | 錯誤種類（Usage／Runtime）與建構函式 | 無 | import 任何 internal package |
 | `internal/version` | `var Version = "0.0.0-dev"`，發佈時以 ldflags 覆寫 | 無 | — |
-| `internal/testutil/fixture` | 測試用：建立 fixture repo | 無（只用標準庫） | 被非 `_test.go` 檔 import |
+| `internal/testutil/fixture` | 測試用：建立 fixture repo（可用 `os/exec` 執行 git，見 §11「測試專用路徑」） | 無（只用標準庫） | 被產品 package 或任何非 `_test.go` 檔 import |
 | `internal/archtest` | 架構測試（只有 `_test.go`） | 標準庫 `go/parser` 等 | — |
-| `test/e2e` | 端對端測試：編譯執行檔、以子程序執行、比對 stdout/stderr/exit code | `internal/testutil/fixture` | import 產品 package（只能透過執行檔測） |
+| `test/e2e` | 端對端測試：編譯執行檔、以子程序執行、比對 stdout/stderr/exit code（只有 `_test.go`） | 標準庫、`internal/testutil/...` | import 任何產品 package（只能透過執行檔測；archtest 強制，S-03） |
+| `test/e2e/fakegit` | AC-39 用的假 git 執行檔原始碼（`package main`，§12.1.5） | 只用標準庫 | import 任何專案內 package；被任何 package import |
 
 ### 5.2 相依方向圖（箭頭＝可以 import）
 ```
@@ -282,7 +286,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, loc *time
 |---|---|---|
 | 第 5 節的 package 相依方向 | `internal/archtest`（`go/parser` 讀所有 import，依白名單比對）＋ golangci-lint `depguard` | `go test ./...` 失敗、lint 失敗 |
 | 只有 `cmd/git-stats` 能 `os.Exit`、`log.Fatal` | `forbidigo` | lint 失敗 |
-| 只有 `internal/gitlog` 能 import `os/exec` | depguard ＋ archtest | 失敗 |
+| `os/exec` 只允許出現在：產品程式中**只有** `internal/gitlog`；以及「測試專用路徑」`internal/testutil/...`、`test/e2e/...`（含 `test/e2e/fakegit`）與任何 `_test.go` 檔 | depguard（產品 package）＋ archtest（全專案逐檔檢查） | 失敗 |
+| 測試專用路徑不得流入產品：產品 package（`cmd/`、`internal/` 下除 `testutil`、`archtest` 以外）不得 import `internal/testutil/...`、`test/...`；`internal/testutil/...` 只能被 `_test.go` 檔 import | archtest | `go test` 失敗 |
+| `test/e2e` 的 `_test.go` 只能 import 標準庫與 `internal/testutil/...`；不得 import 任何產品 package（黑箱，S-03） | archtest | `go test` 失敗 |
+| `test/e2e/fakegit` 只能 import 標準庫，且不得被任何 package import | archtest | `go test` 失敗 |
 | 禁止 `fmt.Print*`、`os.Stdout`、`os.Stderr` 出現在 `cmd/` 以外（輸出必須寫入傳入的 `io.Writer`） | forbidigo | lint 失敗 |
 | 禁止 `time.Now`、`time.Local` 出現在 `cmd/git-stats` 以外（時區一律由 main 傳入） | forbidigo | lint 失敗 |
 | 禁止 import `net`、`net/http` 等網路套件 | depguard ＋ archtest | 失敗 |
@@ -292,10 +299,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, loc *time
 | 安全基本檢查 | `gosec`（排除已審查的 `G204` 於 gitlog） | lint 失敗 |
 | go.mod 新增依賴 | archtest 檢查 go.mod `require` 只含白名單（pflag、go-runewidth 及其遞移依賴） | `go test` 失敗 |
 | `internal/testutil` 只能被測試 import | archtest | 失敗 |
-| 每條 Must AC 至少一個測試 | 測試函式命名含 `AC\d\d`（例如 `TestE2E_AC13_InvalidDateFormat`）；archtest 掃描並比對 AC 清單（清單 `test/e2e/ac_list.txt` 由 QA 的 TEST_PLAN 決定內容） | `go test` 失敗 |
+| `ac_list.txt` 中每條 AC 至少一個測試 | 測試函式命名含 `AC\d\d`（例如 `TestE2E_AC13_InvalidDateFormat`）；archtest 掃描並比對 `test/e2e/ac_list.txt`（內容以 TEST_PLAN §13 為準：列入 AC-34、AC-21、AC-26 等，排除 AC-37、AC-38、AC-45） | `go test` 失敗 |
 | 型別防呆 | `model.Format` 只能經 `ParseFormat` 建立；`model.DateRange` 欄位不匯出、只能經建構函式建立 | 編譯失敗 |
 
 golangci-lint 版本固定（v2 系列，確切版號由 SRE 在 O-xxx 任務決定並寫入 CI）。
+
+**`os/exec` 例外的理由（S-10，回應 TechLead 問題 #8）**：「只有 gitlog 能執行外部程式」這條規則的目的，是讓**產品**對使用者電腦執行的指令集中在一處、可審查（安全、唯讀白名單）。fixture 建置（必須用真的 git 造 repo）、E2E（必須以子程序執行編譯好的執行檔）與假 git 都只在 `go test` 時執行，不會編進發佈的執行檔。因此例外可接受，但以兩條規則限縮：(1) 例外只限上表列出的測試專用路徑；(2) 測試專用路徑不得被產品 package import（否則測試程式碼會流入執行檔）。兩條都由 archtest 逐檔檢查，T-001 的暫定豁免依此定案。
 
 ## 12. 測試策略
 | 層級 | 位置 | 內容 | 外部依賴 |
@@ -305,7 +314,7 @@ golangci-lint 版本固定（v2 系列，確切版號由 SRE 在 O-xxx 任務決
 | 整合測試 | `internal/gitlog` | 用 fixture repo 驗證真正的 git 輸出被正確解析（改名、binary、merge、空 repo、子資料夾、未合併分支） | 本機 git |
 | 端對端（E2E，＝TEST_PLAN 的 Integration） | `test/e2e` | `go build` 出執行檔後以子程序執行，逐條驗證 AC 的 stdout／stderr／exit code／檔案內容（§12.1） | 本機 git |
 | 架構測試 | `internal/archtest` | 第 11 節 | 無 |
-| 安裝／發佈 | CI（SRE）＋ G4 人工 | AC-37、AC-38、M2 | GitHub |
+| 安裝／發佈（REL） | CI（SRE）＋ G4 人工 | AC-34（tag 比對）、AC-37、AC-38、AC-45、M2 | GitHub |
 
 ### 12.1 Fixture repo 與 E2E 做法（QA 對齊 TEST_PLAN 的唯一依據）
 
@@ -314,9 +323,13 @@ golangci-lint 版本固定（v2 系列，確切版號由 SRE 在 O-xxx 任務決
 #### 12.1.1 名詞對照（ARCHITECTURE ↔ TEST_PLAN）
 | 本文件 | TEST_PLAN | 說明 |
 |---|---|---|
-| E2E（`test/e2e`） | Integration（層級 I） | 黑箱：編譯好的執行檔＋真實 git＋fixture repo，不呼叫內部函式 |
-| 安裝／發佈驗證（CI＋G4 人工） | E2E（層級 E） | 從 Release 安裝到執行，AC-33/34/37/38、S1～S4、M2 |
-| 效能測試（build tag `perf`） | 效能（層級 P） | NFR-01/02；負責人待幕僚長指定（TASKS 問題 #6） |
+| 單元測試、fuzz、整合測試（各 package） | —（開發者層級，不作 AC 判定） | 由開發任務撰寫 |
+| E2E（`test/e2e`） | **E2E**（v0.1 稱 Integration／I） | 黑箱：編譯好的執行檔＋真實 git＋fixture repo，不 import 產品 package（§11 archtest 強制） |
+| 效能測試（build tag `perf`） | **P** | NFR-01/02；開發中快速檢查依 §12.1.8，NFR 判定依 TEST_PLAN §6.3；負責人待幕僚長指定（TASKS 問題 #6） |
+| 安裝／發佈驗證（CI＋G4 人工） | **REL**（v0.1 稱 E2E／E） | 從 Release 安裝到執行：AC-34 的 tag 比對、AC-37、AC-38、AC-45、S1～S4、M2 |
+| 人工檢查 | **M** | 例如 SmartScreen 實測、M3 |
+
+TEST_PLAN v0.2 起已採用本表的名稱（E2E／P／REL／M），兩份文件不再有「同名不同義」。
 
 #### 12.1.2 分工與檔案位置
 | 項目 | 位置 | 誰寫 | 誰擁有內容 |
@@ -326,7 +339,7 @@ golangci-lint 版本固定（v2 系列，確切版號由 SRE 在 O-xxx 任務決
 | fixture 指紋 | `test/e2e/testdata/EXPECTED_SHA`（每行 `FX-01 <40 碼 SHA>`） | 首次建置產生，QA 確認後鎖定 | QA |
 | 黃金檔（預期輸出） | `test/e2e/testdata/<FX-ID>/<TC-ID>.stdout`（逐位元組） | **QA 依 TEST_PLAN 手算後手寫**，不得由工具產生 | QA |
 | 測試案例 | `test/e2e/*_test.go`，函式名 `TestE2E_<AC>_<描述>`，子測試名 = TC ID（例：`t.Run("TC-AC22-01", …)`） | Claude Code | QA（Q-xxx 驗收） |
-| AC 清單 | `test/e2e/ac_list.txt`（只列可自動化的 AC；AC-37、AC-38 與 AC-34 的 Release 比對屬人工，不列入） | QA 決定內容 | QA |
+| AC 清單 | `test/e2e/ac_list.txt`：**內容以 TEST_PLAN §13 為準**（目前 AC-34 列入；排除 AC-37、AC-38、AC-45）；檔案格式由 T-016 決定 | Claude Code（T-016）依 TEST_PLAN §13 | QA |
 
 **不採用** TEST_PLAN §4.1 的 POSIX shell 腳本與 `tests/fixtures/`：Windows 需依賴 Git Bash、`/dev/null` 與路徑語意不同、且會與 Go fixture 形成兩套真相。改由 Go 建置工具達成 TEST_PLAN §4.1 的同等要求（固定內容、固定日期、隔離設定、`EXPECTED_SHA`）。TEST_PLAN 由 QA 自行調整（Architect 不修改）。
 
@@ -356,25 +369,43 @@ func (r *Repo) Merge(c Change, branches ...string) string // git merge --no-ff -
                                                    // 有衝突時以 c.Write 的內容解決；2 個以上 branch = octopus（FX-03）
 func (r *Repo) HeadSHA() string
 func (r *Repo) Git(args ...string) string          // 逃生口：以隔離環境執行任意 git 指令，失敗即 t.Fatal
-func (r *Repo) Snapshot() Snapshot                 // status --porcelain、for-each-ref、.git/config 位元組（AC-35、TEST_PLAN G-4）
-func Generate(t testing.TB, n int, seed int64) *Repo // 以 git fast-import 產生 n 個 commit（效能 FX-12；內容由 seed 決定、可重現）
+func (r *Repo) Snapshot() Snapshot                 // status --porcelain、for-each-ref、.git/config 位元組（AC-35、TEST_PLAN G-4，每個案例都做）
+func (r *Repo) SnapshotGitDir() GitDirManifest     // 選用：整個 .git/ 的逐項清單（S-07，§12.1.3.1；TC-AC35-04）
+func DiffGitDir(before, after GitDirManifest) []GitDirChange // 列出新增／刪除／內容或時間改變的路徑
+func Generate(t testing.TB, dir string, spec GenSpec) (*Repo, Totals) // 以 git fast-import 產生 perf repo 到 dir（S-02，§12.1.8）
+type GenSpec struct{ Commits int; Seed int64 /* 其餘形狀參數逐項對應 TEST_PLAN §6.2 */ }
+type Totals map[string]AuthorTotal                // 鍵＝小寫 email；產生器依自己寫入的內容計算，不呼叫產品程式
 func IsolatedEnv(home string) []string             // 下列隔離環境變數（E2E 執行產品時也使用）
 ```
 - 所有 git 呼叫失敗一律 `t.Fatalf`，訊息含指令與 git stderr。
 - 每次 `Commit`／`Merge` 都以 `GIT_AUTHOR_NAME`／`GIT_AUTHOR_EMAIL`／`GIT_AUTHOR_DATE`／`GIT_COMMITTER_NAME`／`GIT_COMMITTER_EMAIL`／`GIT_COMMITTER_DATE` 環境變數傳入，**不**使用 `--date` 或 `git config user.*`。
-- 檔案一律以 `os.WriteFile` 寫入原始位元組；不建立可執行檔、symlink（避免 Windows 差異改變 SHA）。
+- 檔案一律以 `os.WriteFile` 寫入原始位元組；fixture **repo 內容**不建立可執行檔、symlink（避免 Windows 差異改變 SHA）。此限制只針對 fixture repo 裡的檔案；AC-39 的假 git 執行檔不是 fixture 內容，放在 repo 外的暫存目錄，由 §12.1.5 規定做法，不受本條限制（S-06）。
+- `os/exec`：本 package 屬 §11 的「測試專用路徑」，可用 `exec.Command("git", args...)`（參數陣列、不經 shell）。
+
+##### 12.1.3.1 整個 `.git/` 比對（S-07，`SnapshotGitDir`）
+- **比對內容**：遞迴走訪 `.git/` 下所有項目（不排除任何檔案或資料夾），每項記錄：相對路徑（統一用 `/`）、類型（檔案／資料夾／symlink）、檔案大小、內容 SHA-256（只對檔案）、**修改時間（mtime，奈秒）**。資料夾也記錄 mtime：工具若建立又刪除暫存檔（例如 `index.lock`），只有資料夾 mtime 會留下痕跡。
+- **不比對**：存取時間（atime，讀檔本身就會改變）、權限位元與擁有者（Windows 與 Unix 語意不同，且唯讀工具不會改它們）。
+- **為什麼回傳逐項清單而不是單一雜湊值**：TEST_PLAN TC-AC35-04 要依路徑分級（refs、config、objects、HEAD 變動＝致命；只有 index 變動＝高），單一雜湊無法分辨。若需要一個值，可對排序後的清單再算一次 SHA-256 作摘要。
+- **確定性評估**：兩次快照之間只執行受測的 `git-stats`；fixture 建置、`git gc`（`gc.auto=0`）都在快照之前完成，所以正常情況下前後應完全相同。可能造成「非工具造成的差異」的來源與處理：
+  - `ORIG_HEAD`、`logs/`、`index`、`FETCH_HEAD`：只有 merge、checkout、commit、fetch 等**寫入型**指令會改；它們全在快照前由 fixture 執行完畢，快照期間若變動，就代表工具執行了寫入型指令，應判缺陷。因此**不排除**。
+  - `.git/index` 的 stat 快取刷新：只有讀 index 的指令（`status`、`diff` 等）會觸發；產品白名單不含這類指令且設 `GIT_OPTIONAL_LOCKS=0`。若發生即為缺陷（D-19）。
+  - mtime 解析度：NTFS 為 100 奈秒、ext4／APFS 為奈秒；同一 tick 內寫入相同內容無法偵測，接受此限制。
+  - 防毒軟體掃描不會改 mtime（**未驗證**）。
+  - 上述「`git log` 搭配 §4.1 旗標不會寫入 `.git/`」**未驗證**，由 A-001 C1 的唯讀檢查確認；若 A-001 發現某 git 版本會寫入特定檔案，再以新版 ADR 決定是否排除，而不是先排除。
+- 只用於小型 fixture；perf repo 不做（成本高，且不屬 AC-35 範圍）。
 
 #### 12.1.4 隔離環境（fixture 建置與執行產品都套用）
 | 變數／設定 | 值 | 目的 |
 |---|---|---|
 | `HOME`、`USERPROFILE`、`XDG_CONFIG_HOME` | `t.TempDir()` 下的空資料夾 | 不讀使用者 `~/.gitconfig`（Windows 的 git 會看 `USERPROFILE`） |
+| `TMPDIR`、`TEMP`、`TMP`、`APPDATA`、`LOCALAPPDATA` | **預設**也指向該測試自己的 `t.TempDir()` 子資料夾（各一個，存在且為空） | 讓 NFR-08（不在家目錄與暫存目錄留下檔案）可以判定（S-01）；`RunOpts.Env` 仍可覆寫 |
 | `GIT_CONFIG_NOSYSTEM` | `1` | 不讀系統層 gitconfig |
 | `GIT_CONFIG_GLOBAL` | 暫存目錄中的**空檔案**（不用 `/dev/null`，Windows 不通用） | 不讀全域設定；TC-AC08-03 等「惡意使用者設定」測試改指向含特定設定的檔案 |
 | `GIT_TERMINAL_PROMPT` | `0` | 不卡在互動輸入 |
 | `LC_ALL`／`LANG` | `C.UTF-8`（Windows 不設） | git 訊息語言固定（產品不解析 stderr，僅利於除錯） |
 | repo 設定（`git init` 後 `git config`） | `core.autocrlf=false`、`core.safecrlf=false`、`core.filemode=false`、`commit.gpgsign=false`、`gc.auto=0`、`core.quotepath=off` | 行數、SHA 不受平台影響；建置中不觸發 gc |
 | `PATH` | 繼承（找得到 git 與系統工具） | — |
-| Windows 另需保留 | `SYSTEMROOT`、`WINDIR`、`TEMP`、`TMP`、`PATHEXT`、`COMSPEC` | 少了這些，Windows 子程序可能無法啟動 |
+| Windows 另需保留（繼承系統值） | `SYSTEMROOT`、`WINDIR`、`PATHEXT`、`COMSPEC` | 少了這些，Windows 子程序可能無法啟動。`TEMP`／`TMP` 改為上一列的隔離目錄（S-01）；Windows 程式在 `TEMP` 指向存在的目錄時可正常運作（**未驗證**於 git for Windows，E2E 首次在 Windows 跑時確認） |
 
 **可重現性（`EXPECTED_SHA`）**：內容、作者、日期、訊息都固定時，HEAD SHA 理論上在任何平台、任何 git 版本都相同（commit 物件格式穩定）；此點**未驗證**，列入 PoC A-001（三平台＋git 2.34／最新各建一次 FX-01 比對）。SHA 不符時測試以 `t.Fatalf("fixture FX-xx untrusted: …")` 失敗，QA 判為「無法驗證」。
 
@@ -394,6 +425,17 @@ type RunOpts struct {
 - 執行方式：`exec.CommandContext` 直接啟動執行檔（不經 shell），分別擷取 stdout、stderr 位元組與 exit code。
 - 斷言規則：成功案例 stdout 與黃金檔**逐位元組**比對且 stderr 必須為 0 byte；錯誤案例 stdout 必須 0 byte、exit code 精確比對、stderr 以子字串比對（訊息字串見 §8）；每個跑在 fixture 上的案例都前後 `Snapshot()` 比對（TEST_PLAN G-4）。
 - 無網路（NFR-04、G-5）：CI 另以無網路 job 執行同一套件（SRE），測試本身不做網路檢查。
+- NFR-08 判定（TC-NFR08-01）：測試在執行前後列出 §12.1.4 隔離的 `HOME`／`USERPROFILE`／`TMPDIR`／`TEMP`／`TMP`／`APPDATA`／`LOCALAPPDATA` 目錄所有檔案比對（S-01）。
+
+**假 git（AC-39，S-06）**
+- 原始碼：`test/e2e/fakegit/main.go`（`package main`，只用標準庫，約 20 行）。行為：參數為 `--version` 時印出 `git version <FAKEGIT_VERSION 環境變數的值>` 並 exit 0；其他任何參數印 `fakegit: unsupported` 到 stderr 並 exit 1。
+- 編譯：`TestMain` 在編譯 `git-stats` 後，另外 `go build -o <暫存>/fakegit-bin/git[.exe] ./test/e2e/fakegit`（Windows 檔名必須是 `git.exe`，`exec.LookPath` 才找得到）。放在 repo 外的暫存目錄，不屬於 fixture 內容，因此不受 §12.1.3「不建立可執行檔」限制。
+- 使用：TC-AC39-02／03 以 `RunOpts.Env` 設 `PATH=<fakegit-bin>`（只含假 git；Windows 另保留 `SYSTEMROOT` 等）與 `FAKEGIT_VERSION=2.30.0`／`2.34.0`。TC-AC39-01 以只含空資料夾的 `PATH` 模擬「找不到 git」。
+- §11：`test/e2e/fakegit` 只能 import 標準庫、不得被 import；可使用 `os/exec` 以外的一切標準庫（它不需要 `os/exec`）。
+
+**Git 2.34 的 CI job（S-04）**
+- CI 矩陣必須**固定保留**一組以「AC-39 規定的最低 git 版本」（目前 2.34）執行完整 `go test ./...`（含 E2E）的 job，每個 PR 都跑，不只在 PoC A-001 跑一次；建議做法為 `container: ubuntu:22.04`（套件版 git 2.34.1，**未驗證**，以 job 中 `git --version` 為準）。CI 由 SRE 以 O-xxx 任務實作。
+- 若 A-001 結果使最低版本改變，此 job 的版本隨 AC-39 一起改（需新 ADR＋PM 修改 AC-39）。
 
 #### 12.1.6 時區（Windows 部分待 PoC A-001）
 - **已查證**：Go 在 Linux／macOS 依 `TZ` 環境變數決定 `time.Local`；在 **Windows 不讀 `TZ`**，只讀系統時區設定（Go 原始碼 `src/time/zoneinfo_windows.go` 的 `initLocal` 呼叫 `GetTimeZoneInformation`）。v0.1 寫的「Windows 上 Go 也讀 `TZ`」**錯誤，已更正**。
@@ -407,9 +449,19 @@ type RunOpts struct {
 - E2E 黃金檔（`test/e2e/testdata/**`）：**不提供 `-update`**；內容由 QA 依 TEST_PLAN 手算。測試失敗時不得改黃金檔來通過，只能回報。
 - 必須新增 `.gitattributes`（T-001 處理）：`test/**/testdata/** -text` 與 `internal/**/testdata/** -text`，避免 Windows checkout 把 LF 轉成 CRLF 造成逐位元組比對失敗。
 
-#### 12.1.8 效能測試（FX-12）
-- `fixture.Generate(t, 1000|10000, seed)` 產生；測試檔加 build tag `perf`，指令 `go test -tags perf -run TestPerf -count=1 ./test/e2e/...`。
-- 量測：以 `--since 1970-01-01 --until 2099-12-31` 跑完整歷史（回應 TEST_PLAN D-02），先跑 1 次暖機再取 5 次中位數；記錄 CPU、記憶體、OS、git 版本。生成內容的規模參數（每 commit 改幾個檔、幾行）以 A-001 實測採用的參數為準。
+#### 12.1.8 效能測試（FX-12，S-02）
+- **形狀以 TEST_PLAN §6.2 為準**（QA 擁有 FX 內容）。`GenSpec` 的參數逐項對應 TEST_PLAN §6.2；A-001 的效能數據交給 QA，由 QA 判斷是否修改 TEST_PLAN §6.2，產生器不得自行採用其他參數。（取代 v1.0「規模參數以 A-001 實測採用的參數為準」的寫法。）
+- **預期總數表**：`Generate` 同時回傳 `Totals`（每位作者 commit 數、新增、刪除），由產生器依自己寫入的內容計算，**不得呼叫產品程式**。為了讓產生器算出的數字與 git numstat 必然一致，產生器必須遵守：
+  1. 每一行文字在整個 repo 歷史中唯一（例如內含「commit 序號＋檔名＋行號」），使 diff 結果沒有歧義；
+  2. 「改名」commit 中被改名的檔案內容完全不變（純改名，numstat 為 0／0），同一 commit 可另外修改其他檔案；
+  3. binary 檔的變更不計行數；merge commit 行數計 0（同產品規則 §6）。
+  （此為 Architect 對 TEST_PLAN §6.2「約 1% commit 含改名」的實作限制；若 QA 需要「改名＋修改」型態，須另定相似度與預期算法。）
+- **保留在磁碟上**：`Generate` 寫入呼叫者指定的 `dir`（不強制 `t.TempDir()`）。提供 `go test -tags perf -run TestPerfGenerate -count=1 ./test/e2e/... -args -perf.out=<目錄>`：在 `<目錄>/perf-1k`、`<目錄>/perf-10k` 建 repo，並寫出 `<目錄>/perf-*.totals.json`，供 `hyperfine` 等外部工具使用。
+- **兩種量測，用途不同**：
+  - 開發中快速檢查（Go perf 測試，`go test -tags perf -run TestPerf -count=1 ./test/e2e/...`）：暖機 1 次、取 5 次中位數，只用來及早發現退步，**不作為 NFR 判定**。
+  - **NFR-01／NFR-02 判定依 TEST_PLAN §6.3**：參考機器 `ubuntu-24.04` 標準 runner；`hyperfine --warmup 3 --runs 10`；**10 次的最大值** ≤ 門檻（10k ≤ 10 秒、1k ≤ 2 秒）；只看 warm cache，cold cache 只記錄。
+- 範圍參數：`--since 1970-01-01 --until 2099-12-31`（D-02）。
+- 本節預算數字仍**未驗證**，見 §10 與 A-001 C2。
 
 #### 12.1.9 對 TEST_PLAN 待釐清事項的架構回覆（QA 可直接採用）
 | D | 架構答案 | 依據 |
@@ -431,7 +483,8 @@ type RunOpts struct {
 | D-15 | bare repo 與直接給 `.git` 資料夾都視為「不是 Git repo」，exit 1 | P-04（已確認） |
 | D-16 | exit 2 | §3 |
 | D-17 | 格式值**區分大小寫**，`CSV` → exit 2 並列出 `table`、`csv` | §3 |
-| D-18 | 未知旗標（`--help --bogus`）→ exit 2；`--help` 搭配其他合法旗標或錯誤的旗標「值」（如 `--format json`）→ exit 0 | §3 驗證順序 |
+| D-18 | 未知旗標與 `--help` 並用（不論順序）→ exit 2；`--help` 搭配其他合法旗標或錯誤的旗標「值」（如 `--format json`）→ exit 0 | §3 驗證順序 |
+| D-18b | `--help` 與 `--version` 並用 → `--help` 優先（exit 0、只印用法）；`--since --help` → `--help` 被當成起日的值，不觸發說明，exit 2；需要值的旗標在最後沒有值 → exit 2 | §3（v1.1） |
 | D-19 | 產品設 `GIT_OPTIONAL_LOCKS=0` 且不執行讀 index 的指令，預期不會發生；若發生視為缺陷 | §4.2、§9 |
 | D-21 | Go 寫入 Windows 主控台時會轉成 UTF-16 呼叫主控台 API，預期與字碼頁無關都能正確顯示（**未驗證**，A-001 附帶檢查） | — |
 
@@ -562,4 +615,5 @@ type RunOpts struct {
 | 版本 | 日期 | 變更 |
 |---|---|---|
 | v0.1 | 2026-11-22 | 初版（ARCH-001），送 G2 |
+| v1.1 | 2026-11-22 | ARCH-002：與 TEST_PLAN v0.2 對齊（S-01～S-10），技術選擇不變。§3 補 `--help`／`--version` 優先順序與旗標缺值規則，並要求明確定義 help／version 旗標（pflag 原始碼查證）；§5.1、§11 定案 `os/exec` 與測試專用路徑規則（gitlog＋`internal/testutil`、`test/e2e`、`fakegit`），archtest 禁止 E2E import 產品程式；§12.1.1 名詞改為 E2E／P／REL／M；§12.1.2 `ac_list` 改引用 TEST_PLAN §13；§12.1.3 新增 `SnapshotGitDir`（整個 `.git/` 逐項清單）與 `Generate` 新簽名；§12.1.4 預設隔離 TMPDIR／TEMP／TMP／APPDATA／LOCALAPPDATA；§12.1.5 新增假 git 與 Git 2.34 CI job；§12.1.8 效能判定改依 TEST_PLAN §6；依據改為 PRD v1.2（AC 無變更） |
 | v1.0 | 2026-11-22 | G2 核准（00:44）：技術棧與 ADR-001～004 改為已接受；P-01～P-08 暫定做法確認；§3 補 `--format` 大小寫與 `--help`＋未知旗標規則；§16 補 PRD v1.1 的 AC-39～AC-45 對照；§12.1 補齊 fixture API、隔離環境、`EXPECTED_SHA`、E2E 執行方式、黃金檔規則、效能測試、TEST_PLAN D-01～D-21 架構回覆；更正「Windows 上 Go 讀 `TZ`」的錯誤說法；新增 PoC A-001 連結 |

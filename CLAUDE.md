@@ -28,7 +28,7 @@ go build -o bin/git-stats ./cmd/git-stats             # 產生本機執行檔（
 cmd/git-stats/          進入點：只呼叫 cli.Run 並 os.Exit
 internal/cli/           旗標解析、驗證、流程、錯誤→exit code、輸出出口
 internal/daterange/     YYYY-MM-DD 嚴格解析、建立 model.DateRange
-internal/gitlog/        唯一可以執行 git（os/exec）的地方；解析 git 輸出
+internal/gitlog/        產品程式中唯一可用 os/exec 的地方；解析 git 輸出（測試專用路徑例外見 ARCHITECTURE §11）
 internal/stats/         純函式：篩選、合併作者、計數、排序
 internal/render/        表格、CSV，只寫入傳入的 io.Writer
 internal/model/         共用型別
