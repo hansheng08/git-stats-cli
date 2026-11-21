@@ -1,6 +1,6 @@
 # ADR-002：Git 資料取得方式
 
-- 狀態：提議（待 G2）
+- 狀態：已接受（Accepted，老闆於 2026-11-22 00:44 G2 核准）；最低 git 版本、`GIT_NO_LAZY_FETCH` 與效能待 PoC A-001 結果確認，若被推翻另開新 ADR
 - 日期：2026-11-22
 - 作者：Architect（交接單 ARCH-001）
 
@@ -19,7 +19,7 @@
 | 跨平台建置 | ◎ | ◎ | ✕ |
 | 測試難度 | ○ 需真的 git 建 fixture | ○ | △ |
 
-## 決定（建議）
+## 決定
 採用 **A：以子程序呼叫 `git`**，所有呼叫集中在 `internal/gitlog`，只允許唯讀子指令（`--version`、`rev-parse`、`log`）。日期篩選**不**用 git 的 `--since/--until`（它依 committer date，與 AC-12 衝突），改在 Go 端依 `%at` 篩選。完整旗標與輸出格式見 ARCHITECTURE.md 第 4 節（輸出格式已在 git 2.47.3 實測）。
 
 ### A-01「使用者已裝 Git」評估：可接受，附條件
@@ -27,6 +27,8 @@
 2. 最低版本 Git 2.34（Ubuntu 22.04 內建版本），README 寫明；旗標相容性未驗證，由 PoC 或 CI 確認。
 3. 找不到 git 或版本過舊時 exit 1，訊息附安裝連結（PRD 尚無此 AC，建議 PM 補）。
 4. 不自動繞過 `safe.directory` 檢查。
+
+G2 確認：PRD 問題 P-01（缺「找不到 git」AC，暫定 exit 1）、P-03（忽略 `.mailmap`）、P-04（bare repo 視為非 repo）採用本 ADR 與 ARCHITECTURE §18 的暫定做法，PM 將更新 PRD。
 
 ## 後果
 - 好處：零執行期 Git 依賴；結果可直接用 `git log` 人工核對（M3）。

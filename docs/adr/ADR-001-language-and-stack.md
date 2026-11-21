@@ -1,6 +1,6 @@
 # ADR-001：語言與技術棧
 
-- 狀態：提議（Proposed，待老闆於 G2 決定）
+- 狀態：已接受（Accepted，老闆於 2026-11-22 00:44 G2 核准）
 - 日期：2026-11-22
 - 作者：Architect（交接單 ARCH-001）
 
@@ -20,7 +20,7 @@ git-stats-cli 是單一指令、跨平台（Windows／macOS／Linux）的 CLI（
 | 6. 單一執行檔、跨平台、不靠 PyPI／npm | ◎ `CGO_ENABLED=0` 交叉編譯一行出全平台靜態執行檔 | ○ 可，但 macOS／Windows 交叉編譯需額外工具鏈 | ✕ 需使用者先裝 Python，或用 PyInstaller（檔案大、啟動慢、易被防毒誤判） | ✕ 需 Node，或用 bun/pkg/SEA 打包（檔案大、仍不成熟） |
 | 啟動時間 | ◎ 毫秒級（未驗證） | ◎ | △ 百毫秒級 | △ 百毫秒級 |
 
-## 決定（建議）
+## 決定
 採用 **Go**（Go 官方支援中的最新穩定版；確切版號不確定，建立 go.mod 時以 go.dev 為準並固定在 `go.mod` 的 `go`／`toolchain` 指令）。
 
 執行期依賴（每個都要理由）：

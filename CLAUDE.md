@@ -67,7 +67,8 @@ docs/                   文件（只有任務單明確要求才可以寫 docs/re
 - Package：小寫單字（`daterange`，不用底線或駝峰）。檔名：`snake_case.go`。
 - 匯出識別字 `PascalCase`，未匯出 `camelCase`；縮寫全大寫（`CSV`、`URL`、`ID`）。
 - 測試函式含 AC 編號：`TestE2E_AC13_InvalidDateFormat`、`TestAggregate_AC19_TieBreakByEmail`。
-- golden file：`<package>/testdata/<情境>.golden`；更新 golden 用 `go test ./... -update`（旗標由實作提供），並在報告說明為何更新。
+- 單元測試 golden file：`<package>/testdata/<情境>.golden`，可用 `-update` 重新產生並在報告說明原因。
+- E2E 黃金檔 `test/e2e/testdata/**` 與 `EXPECTED_SHA` 由 QA 擁有：不可產生、不可修改來讓測試通過，失敗就回報（ARCHITECTURE §12.1）。
 - Commit 訊息：`[ClaudeCode] <任務編號> <摘要>`（例：`[ClaudeCode] T-003 CSV 輸出`）。
 
 ## 測試規則

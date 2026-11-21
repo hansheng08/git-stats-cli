@@ -1,6 +1,6 @@
 # ADR-003：發佈與安裝方式
 
-- 狀態：提議（待 G2；實際發佈屬 G4，需老闆核准）
+- 狀態：已接受（Accepted，老闆於 2026-11-22 00:44 G2 核准）；實際發佈屬 G4，仍需老闆核准
 - 日期：2026-11-22
 - 作者：Architect（交接單 ARCH-001）
 
@@ -16,7 +16,7 @@
 | 安全（完整性驗證） | ○ 腳本驗 SHA-256 | △ 靠使用者自行驗 | ○ | ○ |
 | 新終端機立即可用 | ○（見後果） | △ | ◎ | △ 需 `$GOPATH/bin` 在 PATH |
 
-## 決定（建議）
+## 決定
 採用 **A**，B 作為 README 中的手動備案。
 - tag `vX.Y.Z` 推送 → GitHub Actions 執行 GoReleaser（`CGO_ENABLED=0`）→ Release 附 `linux_amd64`、`linux_arm64`、`darwin_amd64`、`darwin_arm64`（`.tar.gz`）、`windows_amd64`（`.zip`）、`checksums.txt`，Release 說明含變更摘要與三平台安裝指令（AC-38）。
 - 版本以 ldflags 注入 `internal/version.Version`，值為 tag 去掉 `v`（AC-34）。
@@ -28,7 +28,7 @@
 ## 後果
 - 好處：完全符合老闆的發佈限制；每平台 1 行指令。
 - 壞處與風險（皆**未驗證**，列入 PoC A-001 或 G4 實測）：
-  - 執行檔未做程式碼簽章：Windows SmartScreen／Defender 可能警告；macOS 以 curl 下載不會加 quarantine 屬性，一般不觸發 Gatekeeper，但瀏覽器下載的手動備案會觸發，README 需說明 `xattr -d com.apple.quarantine`。程式碼簽章（Apple Developer ID、Windows 憑證）有費用，MVP 不做，需老闆決定是否日後加入。
+  - 執行檔未做程式碼簽章：Windows SmartScreen／Defender 可能警告；macOS 以 curl 下載不會加 quarantine 屬性，一般不觸發 Gatekeeper，但瀏覽器下載的手動備案會觸發，README 需說明 `xattr -d com.apple.quarantine`。程式碼簽章（Apple Developer ID、Windows 憑證）有費用；**老闆 G2 決定不做**。未簽章的實際警告行為由 PoC A-001 與 G4 實測記錄，README 需寫處理方式。
   - `curl | sh`／`irm | iex` 模式需使用者信任腳本來源；以固定到 main 分支、腳本內驗證 checksum 緩解。
   - Windows 改使用者 PATH 後，只有「新開的」終端機生效（符合 AC-37 敘述）。
 - 回滾：將有問題的 Release 改為 pre-release 或下架，安裝腳本預設抓 `latest`，即自動回到前一版；細節由 SRE 寫入 DEPLOY_SPEC／RUNBOOK。刪除 Release／tag 屬刪除動作，需老闆核准。
