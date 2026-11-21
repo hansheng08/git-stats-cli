@@ -4,7 +4,7 @@
 - 版本：v1.0（G2 已於 2026-11-22 00:44 由老闆核准：採用 Go＋git CLI＋GoReleaser、指令名 `git-stats`、不做程式碼簽章；§12.1 於同日補齊）
 - 最後更新：2026-11-22
 - 相關交接單：ARCH-001（v0.1）、G2 後交接單（v1.0）；PoC：[A-001](tasks/A-001.md)
-- 依據：docs/PRD.md v1.0（commit 870d766，AC-01～AC-38、NFR-01～NFR-08）
+- 依據：docs/PRD.md v1.1（commit f5dbf86，AC-01～AC-45、NFR-01～NFR-08）
 - 相關 ADR：[ADR-001 語言與技術棧](adr/ADR-001-language-and-stack.md)、[ADR-002 Git 資料取得方式](adr/ADR-002-git-data-access.md)、[ADR-003 發佈與安裝](adr/ADR-003-distribution-and-install.md)、[ADR-004 模組邊界與自動強制](adr/ADR-004-module-boundaries-enforcement.md)
 
 > 名詞說明（第一次出現時的白話解釋；PRD 已解釋過的 CLI、commit、AC、exit code、stdout/stderr 等不再重複）
@@ -526,8 +526,15 @@ type RunOpts struct {
 | AC-36 stdout/stderr 分流 | `cli`（緩衝、單一輸出出口） | E2E、forbidigo |
 | AC-37 單一指令安裝 | `scripts/install.sh`、`scripts/install.ps1`、README | SRE CI／G4 人工 |
 | AC-38 GitHub Release | `.goreleaser.yaml`、`.github/workflows/release` | SRE／G4 |
+| AC-39 找不到 git／版本過舊（v1.1） | `gitlog`（`git --version` 檢查，最低 2.34）、`cli`（訊息、exit 1） | E2E（PATH 不含 git；假 git 腳本回報舊版本） |
+| AC-40 忽略 `.mailmap`（v1.1） | `gitlog`（`--no-use-mailmap`、使用 `%an`／`%ae`） | 整合＋E2E |
+| AC-41 detached HEAD（v1.1） | `gitlog`（`log HEAD`） | 整合＋E2E |
+| AC-42 bare repo 視為非 repo（v1.1） | `gitlog.Open`（`rev-parse --is-inside-work-tree`） | E2E |
+| AC-43 CSV 換行 LF（v1.1） | `render`（`encoding/csv`，`UseCRLF=false`） | E2E 三平台逐位元組比對 |
+| AC-44 CSV 公式字元原樣輸出（v1.1） | `render`（不做跳脫） | golden＋讀回 |
+| AC-45 Release 產物平台（v1.1） | `.goreleaser.yaml`（linux/darwin amd64+arm64、windows amd64） | SRE／G4 |
 
-38 條 AC 全部有對應模組。NFR 對應：NFR-01/02 → 第 10 節；NFR-03 → 第 14 節產物＋CI 矩陣；NFR-04/05/08 → 第 9 節；NFR-06 → 第 8 節；NFR-07 → 第 4.2 節 `-z`／`--encoding`、第 7 節。
+45 條 AC（含 PRD v1.1 新增的 AC-39～AC-45）全部有對應模組。NFR 對應：NFR-01/02 → 第 10 節；NFR-03 → 第 14 節產物＋CI 矩陣；NFR-04/05/08 → 第 9 節；NFR-06 → 第 8 節；NFR-07 → 第 4.2 節 `-z`／`--encoding`、第 7 節。
 
 ## 17. 風險與未決事項
 | # | 風險 | 處理 |
@@ -541,7 +548,7 @@ type RunOpts struct {
 
 ## 18. PRD 問題（不修改需求，回報幕僚長轉 PM）
 
-> **狀態（2026-11-22 G2）**：老闆核准 P-01～P-08 全部採用本節的暫定做法，已確認；PM 將據此更新 PRD。以下內容即為定案做法。
+> **狀態（2026-11-22 G2）**：老闆核准 P-01～P-08 全部採用本節的暫定做法，已確認；PM 已在 PRD v1.1（f5dbf86）落實為 AC-39～AC-45、M2 與 AC-35 修訂。以下內容即為定案做法。
 - **P-01**：沒有「找不到 git／git 版本過舊」的 AC。本架構以 exit 1 處理，建議補 AC。
 - **P-02**：M2「安裝到第一次出結果 ≤ 5 分鐘」是否包含安裝 Git，不明確。
 - **P-03**：PRD 4.2 寫「不支援 `.mailmap`」，但 git 預設會套用 `.mailmap`。本架構以 `--no-use-mailmap` **明確忽略**，讓結果與 AC-02～AC-04 一致；若使用者以 `git shortlog`（會套用 mailmap）核對 M3，數字可能不同，README 需說明。請 PM 確認「忽略」是期望行為。
@@ -555,4 +562,4 @@ type RunOpts struct {
 | 版本 | 日期 | 變更 |
 |---|---|---|
 | v0.1 | 2026-11-22 | 初版（ARCH-001），送 G2 |
-| v1.0 | 2026-11-22 | G2 核准（00:44）：技術棧與 ADR-001～004 改為已接受；P-01～P-08 暫定做法確認；§3 補 `--format` 大小寫與 `--help`＋未知旗標規則；§12.1 補齊 fixture API、隔離環境、`EXPECTED_SHA`、E2E 執行方式、黃金檔規則、效能測試、TEST_PLAN D-01～D-21 架構回覆；更正「Windows 上 Go 讀 `TZ`」的錯誤說法；新增 PoC A-001 連結 |
+| v1.0 | 2026-11-22 | G2 核准（00:44）：技術棧與 ADR-001～004 改為已接受；P-01～P-08 暫定做法確認；§3 補 `--format` 大小寫與 `--help`＋未知旗標規則；§16 補 PRD v1.1 的 AC-39～AC-45 對照；§12.1 補齊 fixture API、隔離環境、`EXPECTED_SHA`、E2E 執行方式、黃金檔規則、效能測試、TEST_PLAN D-01～D-21 架構回覆；更正「Windows 上 Go 讀 `TZ`」的錯誤說法；新增 PoC A-001 連結 |
