@@ -1,0 +1,98 @@
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - depguard
+    - forbidigo
+    - errcheck
+    - govet
+    - staticcheck
+    - errorlint
+    - gosec
+  settings:
+    depguard:
+      rules:
+        no-network:
+          list-mode: lax
+          files: ["$all"]
+          deny:
+            - pkg: net
+              desc: network packages are forbidden (NFR-04, ARCHITECTURE §9)
+        no-os-exec:
+          list-mode: lax
+          files:
+            - "!$test"
+            - "!**/internal/gitlog/**"
+            - "!**/internal/testutil/**"
+            - "!**/test/**"
+          deny:
+            - pkg: os/exec
+              desc: only internal/gitlog may run external programs (ARCHITECTURE §11)
+        no-cli-import:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!**/cmd/git-stats/**"
+            - "!**/internal/cli/*_test.go"
+          deny:
+            - pkg: github.com/hansheng08/git-stats-cli/internal/cli
+              desc: only cmd/git-stats may import internal/cli (ARCHITECTURE §5.2)
+        stats-boundary:
+          list-mode: lax
+          files: ["**/internal/stats/**"]
+          deny:
+            - pkg: github.com/hansheng08/git-stats-cli/internal/gitlog
+              desc: stats must not import gitlog (ARCHITECTURE §5.2)
+            - pkg: github.com/hansheng08/git-stats-cli/internal/render
+              desc: stats and render must not import each other (ARCHITECTURE §5.2)
+        render-boundary:
+          list-mode: lax
+          files: ["**/internal/render/**"]
+          deny:
+            - pkg: github.com/hansheng08/git-stats-cli/internal/gitlog
+              desc: render must not import gitlog (ARCHITECTURE §5.2)
+            - pkg: github.com/hansheng08/git-stats-cli/internal/stats
+              desc: stats and render must not import each other (ARCHITECTURE §5.2)
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^os\.Exit$
+          msg: "[main-only] only cmd/git-stats may call os.Exit"
+        - pattern: ^log\.Fatal.*$
+          msg: "[main-only] only cmd/git-stats may call log.Fatal*"
+        - pattern: ^fmt\.Print.*$
+          msg: "[main-only] write to an injected io.Writer instead of fmt.Print*"
+        - pattern: ^os\.(Stdout|Stderr)$
+          msg: "[main-only] write to an injected io.Writer instead of os.Stdout/os.Stderr"
+        - pattern: ^time\.(Now|Local)$
+          msg: "[main-only] time zone and clock must be passed in from cmd/git-stats"
+        - pattern: ^panic$
+          msg: "[no-panic] panic is forbidden in non-test code"
+        - pattern: ^os\.(Create|WriteFile)$
+          msg: "[cli-only] only internal/cli output functions may write files (ARCHITECTURE §9)"
+  exclusions:
+    rules:
+      - linters: [forbidigo]
+        text: '\[main-only\]'
+        path: '^cmd/git-stats/|_test\.go$|^internal/testutil/|^test/'
+      - linters: [forbidigo]
+        text: '\[cli-only\]'
+        path: '^internal/cli/|_test\.go$|^internal/testutil/|^test/'
+      - linters: [forbidigo]
+        text: '\[no-panic\]'
+        path: '_test\.go$|^internal/testutil/|^test/'
+      - linters: [gosec]
+        text: 'G204'
+        path: '^internal/gitlog/|^internal/testutil/|^test/|_test\.go$'
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  uniq-by-line: false
