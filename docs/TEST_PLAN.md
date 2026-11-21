@@ -1,10 +1,10 @@
 # git-stats-cli 測試計畫（TEST_PLAN）
 
 - 文件擁有者：QA
-- 版本：v0.3.1（交接單 TP-003：對齊 PRD v1.2 的 NFR 優先度與嚴重度；NFR-06～08 依幕僚長通知為 Should）
+- 版本：v0.4（交接單 TP-004：對齊 ARCHITECTURE v1.1、PRD v1.3）
 - 最後更新：2026-11-22
-- 預期結果的依據（唯一）：`docs/PRD.md` v1.2（commit `8b5d669`；AC-01～AC-45、NFR-01～NFR-08，含第 6 節 NFR 優先度、嚴重度與判定條件）。v1.1→v1.2 只改第 6 節與新增 Q-17，**AC 內容未變更**
-- 只用於「對外介面」與「測試基礎設施」的參考：`docs/ARCHITECTURE.md` v1.0（commit `915474f`；G2 已於 2026-11-22 00:44 核准：Go＋呼叫 git CLI；PoC A-001 已核准）的 §3 CLI 規格、§7 輸出格式、§8 錯誤訊息格式、§12／§12.1 測試做法（含 §12.1.9 對本計畫待釐清事項的回覆）。若 ARCHITECTURE 與 PRD 衝突，以 PRD 為準並列入第 11 節。
+- 預期結果的依據（唯一）：`docs/PRD.md` v1.3（commit `0c55219`；AC-01～AC-45、NFR-01～NFR-08，含第 6 節 NFR 優先度、嚴重度與判定條件）。v1.1→v1.3 只改第 6 節與 Q-17（v1.3 定案 NFR-06～08＝Should），**AC 內容未變更**
+- 只用於「對外介面」與「測試基礎設施」的參考：`docs/ARCHITECTURE.md` v1.1（commit `5033d3c`；G2 已於 2026-11-22 00:44 核准：Go＋呼叫 git CLI；PoC A-001 已核准）的 §3 CLI 規格、§7 輸出格式、§8 錯誤訊息格式、§12／§12.1 測試做法（含 §12.1.9 對本計畫待釐清事項的回覆）。若 ARCHITECTURE 與 PRD 衝突，以 PRD 為準並列入第 11 節。
 
 > 名詞說明（第一次出現時的白話解釋）
 > - **TC**（Test Case，測試案例）：一組「前置條件 → 步驟 → 預期結果」，可以重複執行並判定通過或失敗。
@@ -403,8 +403,8 @@ G2 已決定以 Go 實作，ARCHITECTURE §12／§12.1 是**測試基礎設施�
 #### AC-33 說明（Must）
 - **TC-AC33-01**（E2E）`git-stats --help`。預期：stdout 含 repo 路徑、起日、迄日、輸出格式、納入 merge commit 選項、日期格式 `YYYY-MM-DD` 的說明（逐項以關鍵字比對：`--since`、`--until`、`--format`、`table`、`csv`、`--include-merges`、`YYYY-MM-DD`，以及路徑參數名稱）；exit 0；stderr 空。
 - **TC-AC33-02**（E2E，邊界，D-18 已關閉，ARCHITECTURE §3）以下都要 stdout 顯示說明、stderr 空、exit 0：在非 Git 資料夾執行 `git-stats --help`；`git-stats -h`；`git-stats --help --format json`；`git-stats /no/such/dir --help`；`git-stats --help --since 2026/01/01`。
-- **TC-AC33-04**（E2E，邊界，D-18 已關閉）`git-stats --help --bogus`（未知旗標）。預期：exit 2、stdout 0 byte、stderr 指出未知旗標（PRD 第 5 節約定「未知選項」屬使用方式錯誤；ARCHITECTURE §3 明定 `--help --bogus` → 2）。
-- **TC-AC33-05**（E2E，只記錄）`git-stats --help --version` 與 `git-stats --version --help`：誰優先 ARCHITECTURE 沒寫（D-18b），只記錄，要求 exit 0、stderr 空。
+- **TC-AC33-04**（E2E，邊界，D-18 已關閉）`git-stats --help --bogus` 與 `git-stats --bogus --help`（未知旗標，兩種順序）。預期：兩者都 exit 2、stdout 0 byte、stderr 指出未知旗標；結果不得因順序而不同（PRD 第 5 節約定「未知選項」屬使用方式錯誤；ARCHITECTURE v1.1 §3）。
+- **TC-AC33-05**（E2E，D-18b 已關閉）`git-stats --help --version` 與 `git-stats --version --help`。預期：兩者都 stdout 只有用法說明（同 TC-AC33-01 的內容檢查）、**不含版本號那一行**、stderr 空、exit 0（`--help` 優先，ARCHITECTURE v1.1 §3；PRD AC-33／AC-34 只各自定義單獨使用的情況，沒有規定並用，屬介面細節）。另 `git-stats <FX-01> --since --help --until 2026-01-31`：`--help` 被當成 `--since` 的值，預期 exit 2、stderr 為日期格式錯誤（含值 `--help` 與 `YYYY-MM-DD`）、stdout 0 byte（PRD AC-13）。結尾 `--until`（缺值）→ exit 2（PRD AC-16，同 TC-AC16-04）。
 - **TC-AC33-03**（REL）在 E2E 安裝後的乾淨機器上執行 TC-AC33-01。
 
 #### AC-34 版本（Must）
@@ -415,7 +415,7 @@ G2 已決定以 Go 實作，ARCHITECTURE §12／§12.1 是**測試基礎設施�
 - **TC-AC35-01**（E2E）FX-01，執行前記錄 `git status --porcelain`、`git for-each-ref`、`.git/config`；執行有資料的查詢（表格、CSV、`--include-merges` 各一次）。預期：三者執行後完全相同。
 - **TC-AC35-02**（E2E）同上，但查詢範圍無資料（2030-01）。預期同上。
 - **TC-AC35-03**（E2E，加強檢查）在 FX-01 的工作目錄放一個未追蹤檔與一個已修改但未 commit 的檔案，再執行。預期：`git status --porcelain` 前後相同、工作目錄檔案內容不變。
-- **TC-AC35-04**（E2E，加強檢查）執行前後對整個 `.git/` 內所有檔案的內容與修改時間計算雜湊值（hash）比對，不排除任何檔案。任何差異（含只有 `.git/index` 時間戳記被更新）都判為缺陷（D-19 已關閉：PRD 4.3「任何寫入」；ARCHITECTURE §12.1.9 同意視為缺陷）。refs、config、objects、HEAD 有變＝致命；只有 index 快取資訊變動＝高。
+- **TC-AC35-04**（E2E，加強檢查）執行前以 `r.SnapshotGitDir()` 記錄整個 `.git/` 的逐項清單（路徑、類型、大小、檔案內容 SHA-256、**檔案與資料夾的 mtime**），執行後再記一次，以 `fixture.DiffGitDir(before, after)` 比對（ARCHITECTURE v1.1 §12.1.3.1）；不排除任何檔案或資料夾，不比對 atime 與權限。`DiffGitDir` 回傳任何一項都判為缺陷（D-19：PRD 4.3「任何寫入」）：refs、config、objects、HEAD 有變＝致命；只有 `.git/index` 或其他快取／鎖檔痕跡（例如資料夾 mtime 因建立又刪除 `index.lock` 而改變）＝高。表格、CSV、`--include-merges`、查無資料各跑一次。已知限制（只記錄）：mtime 解析度內的同內容寫入無法偵測。
 - **TC-AC35-05**（E2E）PRD v1.1 的 AC-35 已限定範圍：`--output` 指向 repo **外**時，三項比對完全相同（必測）。`--output <FX-01>/report.csv`（指向 repo 內）不在 AC-35 範圍：只記錄，預期 refs 與 `.git/config` 不變、`git status --porcelain` 只多一行 `?? report.csv`。
 - 另：G-4 讓整個 E2E 套件的每次執行都做 TC-AC35-01 的三項比對（`--output` 指向 repo 內的案例除外）。
 
@@ -450,7 +450,7 @@ G2 已決定以 Go 實作，ARCHITECTURE §12／§12.1 是**測試基礎設施�
 - **TC-NFR05-01**（M）行為面同 TC-NFR04-01／02；Code review 部分由 TechLead 在 PR 中確認「無遙測、無上傳」並記錄，QA 只檢查 PR 上有此紀錄，不讀程式碼（見 1.2）。
 - **TC-NFR06-01**（M）對所有錯誤類 TC（AC-13～16、27、28、31、32）的 stderr 以 G-3 清單人工判定，結果表附在 QA_REPORT。
 - **TC-NFR07-01**（E2E）FX-08 表格與 CSV 都不當機、不出現 `?`、`\uXXXX`、亂碼；名字與 email 回讀一致。三平台都要驗（Windows 在 Windows Terminal＋UTF-8 字碼頁與預設字碼頁各一次，見待釐清 D-21）。
-- **TC-NFR08-01**（E2E）以 `RunOpts.Env` 設定空的 `HOME`（Windows 另設 `USERPROFILE`、`APPDATA`、`LOCALAPPDATA`）與 `TMPDIR`（Windows `TEMP`、`TMP`；§12.1.4 預設繼承，需在本案例覆寫，見補充需求 S-01），執行代表性案例前後列出這些目錄所有檔案。預期：除 `--output` 指定的檔案外無新增或修改。
+- **TC-NFR08-01**（E2E）使用 §12.1.4 預設的隔離環境：`HOME`／`USERPROFILE`／`XDG_CONFIG_HOME`，以及 `TMPDIR`／`TEMP`／`TMP`／`APPDATA`／`LOCALAPPDATA`（ARCHITECTURE v1.1 起**預設**就指向每個測試自己的空資料夾，不需另外覆寫）。執行代表性案例（成功、查無資料、錯誤、`--output`）前後列出這些目錄的所有檔案。預期：除 `--output` 指定的檔案外，沒有新增或修改任何檔案（PRD NFR-08）。另確認測試啟動時這些目錄確實是空的且不是系統原本的位置，否則本 TC 判「無法驗證」。
 - **TC-M2-01**（REL）同 TC-AC37-01～03 的計時，三平台各 ≤ 5 分鐘（從開啟 README 到看到第一次統計結果）。**不含安裝 Git 的時間**（PRD v1.1 M2）：計時從「已裝好 Git 的乾淨機器開啟 README」開始。
 
 ### PRD v1.1 新增 AC（AC-39～AC-45，全部 Must）
@@ -458,7 +458,7 @@ G2 已決定以 Go 實作，ARCHITECTURE §12／§12.1 是**測試基礎設施�
 #### AC-39 找不到 Git 或 Git 版本過舊（Must）
 - **TC-AC39-01**（E2E）以 `RunOpts.Env` 把 `PATH` 設為不含 `git` 的暫存資料夾，執行 `git-stats <FX-01> --since 2026-01-01 --until 2026-01-31`。預期：stderr 說明找不到 Git 並提示如何安裝；stdout 0 byte；exit 1。
 - **TC-AC39-02**（E2E）`PATH` 最前面放一個假的 `git`（測試在 `TestMain` 另外編譯的小程式，對 `--version` 回 `git version 2.30.0`，Windows 為 `git.exe`）。預期：stderr 含目前版本 `2.30.0` 與最低需求 `2.34`，並提示升級；stdout 0 byte；exit 1。
-- **TC-AC39-03**（E2E，邊界）假 git 回 `git version 2.34.0`（剛好等於最低版本）。預期：不報版本錯誤（之後的行為依假 git 而定，只檢查 stderr 不含版本過舊訊息）。另在 CI 以真正的 Git 2.34 跑完整 E2E 套件，全部通過（NFR-03、ARCHITECTURE §15）。
+- **TC-AC39-03**（E2E，邊界）假 git 回 `git version 2.34.0`（剛好等於最低版本；ARCHITECTURE v1.1 §12.1.5 的 fakegit，對 `--version` 以外的參數一律失敗）。預期：stderr **不含**「版本過舊／需要 2.34」的訊息（PRD AC-39 只對「低於 2.34」報版本錯誤）；因假 git 無法提供資料，後續 git 呼叫失敗屬執行期錯誤，預期 **exit 1**、stdout 0 byte（PRD 第 5 節約定：讀取失敗＝1）。另在 CI 的 Git 2.34 job（§12.1.5）以真正的 Git 2.34 跑完整 E2E 套件，全部通過（NFR-03、AC-39）。
 - **TC-AC39-04**（E2E，邊界：使用方式錯誤優先）沒有 git 時執行 `git-stats <FX-01> --since 2026/01/01 --until 2026-01-31`。預期：exit 2（日期錯誤），不是 1（PRD 約定：參數錯誤不受環境影響；ARCHITECTURE §3 驗證順序）。
 - **TC-AC39-05**（E2E）沒有 git 時 `git-stats --help`、`git-stats --version` 仍 exit 0。
 
@@ -521,24 +521,24 @@ G2 已決定以 Go 實作，ARCHITECTURE §12／§12.1 是**測試基礎設施�
 - 其他平台（Windows、macOS）的效能僅記錄、不作為 NFR-01 判定依據（PRD 只要求「參考測試機器」）。
 
 ### 6.2 測試資料產生器（perf-10k／perf-1k，依 ARCHITECTURE §12.1）
-- 以 `fixture.Generate(t, n, seed)`（內部用 `git fast-import`，Git 內建的批次匯入工具，可在幾秒內造出上萬個 commit）建立，放在 build tag `perf` 的測試中，不在每次 `go test` 執行（ARCHITECTURE §12.1.8）。固定 seed，同一版本每次造出的 HEAD SHA 必須相同（記入 `EXPECTED_SHA`）。
-- **形狀以本節為準**：§12.1.8 寫「規模參數以 A-001 實測採用的參數為準」，但 §12.1.2 規定 FX 內容由 QA 擁有。QA 的決定：A-001 若量到本節形狀不合理（例如產生太慢），由 QA 依 A-001 數據改本節，不由產生器自行決定（見補充需求 S-02）。
+- 以 `fixture.Generate(t, dir, GenSpec{Commits: n, Seed: seed, …})`（回傳 `(*Repo, Totals)`；`GenSpec` 的其餘參數逐項對應本節的形狀；內部用 `git fast-import`，Git 內建的批次匯入工具，可在幾秒內造出上萬個 commit）建立，放在 build tag `perf` 的測試中，不在每次 `go test` 執行（ARCHITECTURE §12.1.8）。固定 seed，同一版本每次造出的 HEAD SHA 必須相同（記入 `EXPECTED_SHA`）。
+- **形狀以本節為準**（ARCHITECTURE v1.1 §12.1.8 已採納）：A-001 的效能數據交給 QA，由 QA 判斷是否修改本節；產生器不得自行採用其他參數。保留在磁碟上：`go test -tags perf -run TestPerfGenerate -count=1 ./test/e2e/... -args -perf.out=<目錄>` 產生 `<目錄>/perf-1k`、`<目錄>/perf-10k` 與 `perf-*.totals.json`，供 `hyperfine` 使用。
 - perf-10k 的形狀（模擬「中型真實專案」）：
   - HEAD 可追溯的 commit 總數恰好 **10,000**（含 merge commit），全在 main 線上。
   - 作者 50 位（其中 5 位有 2 種名字、3 位 email 大小寫不同、5 位中文或 emoji 名字）。
   - 約 2%（200 個）為 merge commit（兩個父 commit），其餘為一般 commit。
-  - 檔案 500 個文字檔、分在 20 個資料夾，外加 20 個 binary 檔；每個一般 commit 改 1～5 個檔，每檔新增 1～50 行、刪除 0～30 行；約 1% commit 含改名。
+  - 檔案 500 個文字檔、分在 20 個資料夾，外加 20 個 binary 檔；每個一般 commit 改 1～5 個檔，每檔新增 1～50 行、刪除 0～30 行；約 1% commit 含改名，且**一律是純改名**（被改名的檔案內容完全不變，numstat 0／0；同一 commit 可另外修改其他檔案），每一行文字在整個歷史中唯一，使產生器算出的預期總數與 git numstat 必然一致（ARCHITECTURE v1.1 §12.1.8 的產生器限制）。「改名＋修改」不放進 perf fixture，由 FX-04 的 TC-AC08-04 覆蓋（見第 11.2 節說明）。
   - author date 平均分布在 2021-01-01～2025-12-31。
 - perf-1k：同一產生器、commit 數 1,000，其他比例相同。
-- 產生器同時輸出「預期總數表」（每位作者 commit／增刪行數，由產生器依自己寫入的內容計算，**不得呼叫產品程式**），效能測試順便驗證結果正確（M1）。產生器本身的正確性：QA 用 `git log --numstat` 對產生的 repo 抽 3 位作者手算核對一次。
+- 產生器同時回傳「預期總數表」`Totals`（鍵＝小寫 email，每位作者 commit／增刪行數；由產生器依自己寫入的內容計算，**不得呼叫產品程式**），效能測試順便驗證結果正確（M1）。產生器本身的正確性：QA 用 `git log --numstat` 對產生的 repo 抽 3 位作者手算核對一次。
 
 ### 6.3 量測方式
 - 指令（整段歷史）：`git-stats <perf-10k> --since 1970-01-01 --until 2099-12-31`（表格）與加 `--format csv`（stdout 導向 `/dev/null` 以排除終端機顯示時間）。「整段歷史」需要給一個涵蓋全部的日期範圍，因 MVP 起訖日必填（Q-09）；perf fixture 的日期全落在 2021～2025，此範圍即等於整段歷史（D-02 已關閉；PRD v1.2 第 6 節已明定此範圍，且要求 fixture 日期全部落在範圍內）。
-- **判定以本節的量測為準**：ARCHITECTURE §12.1.8 的 Go perf 測試（暖機 1 次、取 5 次中位數）是開發中的快速檢查；NFR 通過與否以本節的方法在參考機器上量測（差異見補充需求 S-02）。
+- **判定以本節的量測為準**：ARCHITECTURE §12.1.8 的 Go perf 測試（暖機 1 次、取 5 次中位數）是開發中的快速檢查；NFR 通過與否以本節的方法在參考機器上量測（ARCHITECTURE v1.1 §12.1.8 已同意以本節為準）。
 - 工具：`hyperfine --warmup 3 --runs 10 --export-json perf.json '<指令>'`（執行檔為 `go build` 的正式版本、fixture 由 `fixture.Generate` 產生後保留在磁碟上）；若無法安裝 hyperfine，改用 `/usr/bin/time -v` 手動跑 3 次暖機＋10 次量測。
-- **判定只看 warm cache**（PRD v1.2 第 6 節「NFR 判定條件」，D-02）：10 次量測的**最大值**（也就是每一次都）≤ 10 秒（NFR-02 為 ≤ 2 秒）。另在報告中列出 median、p95、平均、標準差。
+- **判定只看 warm cache**（PRD v1.3 第 6 節「NFR 判定條件」，D-02）：10 次量測的**最大值**（也就是每一次都）≤ 10 秒（NFR-02 為 ≤ 2 秒）。另在報告中列出 median、p95、平均、標準差。
   - 選用「最大值」而不是中位數：PRD 寫「≤ 10 秒完成」，使用者每一次執行都應達到，用中位數會放過偶發超時。
-- 輔助量測（cold cache，只記錄）：每次量測前執行 `sync; echo 3 | sudo tee /proc/sys/vm/drop_caches`（hyperfine `--prepare`），跑 5 次記錄 median 與最大值。**cold cache 結果只記錄、不判定**（PRD v1.2 第 6 節）；若超過 10 秒，在 QA_REPORT 列為資訊。
+- 輔助量測（cold cache，只記錄）：每次量測前執行 `sync; echo 3 | sudo tee /proc/sys/vm/drop_caches`（hyperfine `--prepare`），跑 5 次記錄 median 與最大值。**cold cache 結果只記錄、不判定**（PRD v1.3 第 6 節）；若超過 10 秒，在 QA_REPORT 列為資訊。
 - 同時記錄最大記憶體用量（`/usr/bin/time -v` 的 Maximum resident set size），僅記錄。
 - 雜訊控制：量測時 runner 上不跑其他 job；每個 job 只跑效能測試；結果超標時自動重跑整組一次，兩組都超標才判失敗（避免共用機器的偶發干擾），兩組結果都寫入報告。
 
@@ -612,17 +612,17 @@ G2 已決定以 Go 實作，ARCHITECTURE §12／§12.1 是**測試基礎設施�
    - Windows 的 AC-11（TC-AC11-03）在 PoC A-001 完成前標「待 A-001」；G3 前必須有結果。
    - 因其他原因（環境、待釐清）→ 狀態寫「卡住」，回報幕僚長說明需要誰提供什麼；QA 不自行假設通過。
 3. Should AC（AC-21、AC-26）失敗：記為「中」缺陷，不單獨構成退件；是否放行由老闆決定，QA 在回報中附建議。
-4. **NFR 的優先度與嚴重度（PRD v1.2 第 6 節）**：
+4. **NFR 的優先度與嚴重度（PRD v1.3 第 6 節）**：
 
    | NFR | 優先度 | 違反時嚴重度 | G3 判定 |
    |-----|--------|--------------|---------|
    | NFR-04、NFR-05（安全） | Must | 致命 | 未通過即**退件** |
    | NFR-01、NFR-02（效能）、NFR-03（平台） | Should | 高 | 記錄缺陷、**不阻擋 G3**（見 4b） |
-   | NFR-06（可用性） | Should（Q-17，見 4c） | 中 | 記錄缺陷、**不阻擋 G3**（見 4b） |
-   | NFR-07（相容性）、NFR-08（資料保存） | Should（Q-17，見 4c） | 高 | 記錄缺陷、**不阻擋 G3**（見 4b） |
+   | NFR-06（可用性） | Should | 中 | 記錄缺陷、**不阻擋 G3**（見 4b） |
+   | NFR-07（相容性）、NFR-08（資料保存） | Should | 高 | 記錄缺陷、**不阻擋 G3**（見 4b） |
 
    4b. **Should 類 NFR 未通過的處理**：照樣執行、照樣判定；未通過時在 QA_REPORT 記為缺陷，嚴重度依上表（NFR-01～03＝高），附重現步驟與量測數據。它本身**不構成退件、不阻擋 G3**。但 QA 在回報單「需要老闆決定的事」逐條列出這些缺陷，建議老闆在 G3 明確表示接受或要求修正；QA 不會因為它是 Should 就略過不報。Must AC、Must NFR 的失敗，以及非 Should 項目的高以上缺陷，仍一律退件（第 1 點）。
-   4c. **NFR-06～08 的優先度依據**：幕僚長 2026-11-22 通知 Q-17 已決定為 NFR-06、NFR-07、NFR-08 全部 **Should**，本計畫依此撰寫。**差異註記**：撰寫時 PRD v1.2（`8b5d669`）第 6 節仍寫「未定（見 Q-17）」，7.4 的 Q-17 仍為「待決」（PM 原建議 NFR-07、08＝Must）。PRD 是需求的最終依據，PM 更新 PRD 前此差異保留；若 PRD 最後寫的和幕僚長通知不同，以 PRD 為準並更新本節。
+   4c. **NFR-06～08 的優先度依據**：PRD v1.3 第 6 節與 Q-17（已定案，2026-11-22 01:10 老闆）明定 NFR-06、NFR-07、NFR-08＝Should。v0.3.1 註記的「PRD 尚未反映」差異已消除。
 4d. 「介面檢查」不符（ARCHITECTURE 有寫、PRD 沒要求的訊息字串或版面）＝低，不構成退件。
 5. 全部 Must AC 與 Must NFR 通過，且沒有第 1 點所列的高以上缺陷 → 回報幕僚長，建議送 G3（若有 4b 的 Should 缺陷，一併列出請老闆決定）。
 6. 只對「本次 PR 影響的 AC」做完整驗證；其餘 AC 由回歸測試（第 7 節）覆蓋，回歸任一失敗＝該 AC 失敗。
@@ -711,19 +711,19 @@ NFR 對照：NFR-01→TC-NFR01-01；NFR-02→TC-NFR02-01；NFR-03→TC-NFR03-01�
 | D-16 | 多給位置參數 | exit 2 | ARCHITECTURE §3 | TC-AC31-02 |
 | D-17 | `--format` 大小寫 | 區分大小寫；`CSV`、`Table` → exit 2 並列出 `table`、`csv` | ARCHITECTURE §3（v1.0 新增）、§12.1.9 | TC-AC32-02 |
 | D-18 | `--help` 與其他參數並用 | 未知旗標（`--help --bogus`）→ exit 2；`--help` 搭配其他合法旗標或錯誤的旗標「值」（例如 `--format json`、錯誤日期、不存在路徑）→ exit 0。`--help` 與 `--version` 同時出現誰優先拆出 D-18b | ARCHITECTURE §3（v1.0 新增）、§12.1.9 | TC-AC33-02、04、05 |
-| D-19 | Git 更新 `.git/index` 快取算不算寫入 | 算，視為缺陷 | PRD 4.3「任何寫入」；ARCHITECTURE §12.1.9 同意 | TC-AC35-04 |
+| D-18b | `--help` 與 `--version` 並用；旗標缺值與 `--help` 並用 | `--help` 優先（exit 0、只印用法）；`--since --help` → `--help` 被當成起日值，日期錯誤 exit 2；結尾缺值 → exit 2 | ARCHITECTURE v1.1 §3、§12.1.9（PRD 未規定並用，屬介面細節；後兩者由 PRD AC-13、AC-16 推得） | TC-AC33-04、05 |
+| D-19 | Git 更新 `.git/index` 快取算不算寫入 | 算，視為缺陷；以 `SnapshotGitDir`／`DiffGitDir` 檢查（含資料夾 mtime） | PRD 4.3「任何寫入」；ARCHITECTURE v1.1 §12.1.3.1 | TC-AC35-04 |
 | D-22 | NFR 等級 | 安全類（NFR-04、05）＝致命；效能（NFR-01、02）、平台（NFR-03）＝高 | PRD v1.1／v1.2 第 6 節 | 第 9.3 節 |
-| D-22b | NFR-06～08 嚴重度 | NFR-06＝中；NFR-07、NFR-08＝高（與 QA 建議相同） | **PRD v1.2 第 6 節**（老闆 2026-11-22 01:06） | 第 9.3 節 |
+| D-22b | NFR-06～08 嚴重度與優先度 | 嚴重度 NFR-06＝中、NFR-07／08＝高；優先度三項皆 Should | **PRD v1.2／v1.3 第 6 節**、Q-17（老闆 2026-11-22 01:06、01:10） | 第 9.3 節 |
 
 **D-17、D-18 的說明**：TP-002 開工時（ARCHITECTURE v0.1）這兩項沒有答案，QA 原本的建議是：D-17「區分大小寫、exit 2」；D-18「`--help` 優先於所有參數內容檢查，但未知旗標仍 exit 2」。ARCHITECTURE v1.0 在 §3 加入的規則和 QA 建議一致，所以兩項直接關閉。和 v0.1 本計畫的衝突只有一處：v0.1 暫定「`--help` 與任何參數並用都 exit 0」，v0.2 改為 `--help --bogus` 判 exit 2（理由：PRD 第 5 節約定「未知選項」屬使用方式錯誤，AC-33 只定義 `--help` 單獨使用的情況）。仍未寫清楚的部分是 D-18b（`--help` 和 `--version` 同時出現），以及「旗標缺值」與 `--help` 並用時的情況（例如 `--since --help`：`--help` 可能被當成 `--since` 的值，結果變成日期錯誤 exit 2）。這兩點都只記錄（TC-AC33-05），請 Architect 在 §3 補一句。
 
 ### 11.2 仍開放
 | # | 相關 AC/NFR | 問題 | 為什麼不能自己決定 | QA 暫定做法 |
 |---|-------------|------|--------------------|-------------|
-| D-18b | AC-33、34 | `--help` 與 `--version` 同時出現誰優先；`--since --help` 這種旗標缺值的情況 | ARCHITECTURE §3 沒寫；PRD 沒定義 | 只記錄；要求 exit 0 或 2，且 G-1／G-2 成立 |
 | D-20 | AC-37 | 「下載 Release 檔案後 1 個步驟」怎麼算、SmartScreen／Gatekeeper 警告處理算不算步驟 | ARCHITECTURE §12.1.9 沒有回覆；§14 主要路徑是 1 行安裝指令，手動下載為備案；R-04 未驗證 | 以 1 行安裝指令為主要判定；手動路徑每個動作算 1 步，記錄 |
 | D-21 | NFR-07 | Windows 非 UTF-8 字碼頁下的表格中文顯示 | ARCHITECTURE §12.1.9 預期與字碼頁無關都正確，但**未驗證**（PoC A-001 附帶檢查） | 兩種字碼頁都要求顯示正確；A-001 結果出來前標「待 A-001」 |
-| Q-17 | NFR-06、07、08 | PRD 文字尚未反映 Q-17 的決定 | 幕僚長通知全部為 Should，但 PRD v1.2 第 6 節仍寫「未定」、Q-17 仍為「待決」 | 依幕僚長通知寫成 Should；PM 更新 PRD 後關閉此項（若內容不同，以 PRD 為準） |
+| 覆蓋說明 | AC-08、PRD A-04 | perf fixture 只做純改名，「改名＋修改」不在 perf 資料中 | ARCHITECTURE v1.1 §12.1.8 為了讓產生器的預期值與 numstat 必然一致而限制；這不影響 AC 覆蓋：AC-08 本身只要求純改名，「改名＋修改」（D-03，PRD A-04）仍由 FX-04 #7 的 TC-AC08-04 以手算預期值覆蓋 | 不是覆蓋缺口；若之後有人要求 FX-04 也改成只有純改名，QA 會視為移除 D-03 的覆蓋而拒絕，需經老闆核准 |
 
 ### 11.3 PRD v1.1（ARCHITECTURE §18 P-01～P-08 定案）對本計畫的影響
 | P | PRD v1.1 | 對本計畫的影響 |
@@ -739,7 +739,7 @@ NFR 對照：NFR-01→TC-NFR01-01；NFR-02→TC-NFR02-01；NFR-03→TC-NFR03-01�
 
 D-03 不在 P-01～P-08 範圍內；本計畫依 PRD A-04＋ARCHITECTURE §12.1.9 關閉（見 11.1）。
 
-**案例統計（v0.3，與 v0.2 相同；PRD v1.2 沒有新增或修改 AC）**：AC 類 TC 158 個、NFR／M2 類 10 個、對外介面類 4 個（TC-CFG-01、TC-CLI-01～03）、情境類 4 個，合計 **176 個**（v0.1 為 149 個）。
+**案例統計（v0.4，與 v0.2 相同；PRD v1.2、v1.3 沒有新增或修改 AC；TP-004 只修改既有 TC）**：AC 類 TC 158 個、NFR／M2 類 10 個、對外介面類 4 個（TC-CFG-01、TC-CLI-01～03）、情境類 4 個，合計 **176 個**（v0.1 為 149 個）。
 
 ## 12. 後續工作
 1. 各 T-xxx 的 PR 開好、TechLead Review 通過後，QA 產出 Q-xxx 任務單，請 Claude Code 在該 task/T-xxx 分支依 ARCHITECTURE §12.1.2 的位置與命名追加本計畫的 TC（子測試名＝TC ID）與 QA 手寫的黃金檔。
@@ -767,9 +767,11 @@ D-03 不在 P-01～P-08 範圍內；本計畫依 PRD A-04＋ARCHITECTURE §12.1.
 - 清單格式（每行 `AC-01` 或 `AC01`）由 T-016 決定，**內容以本節為準**；清單有任何增刪都要先改本節。
 - 之後 PRD 新增的 AC：能在 `go test` 驗證的一律列入，在新增 AC 的同一份 TEST_PLAN 更新中決定。
 - 排除不代表不測：AC-37、AC-38、AC-45 仍是 Must，G4 前必須通過（第 9.3 節第 2 點）。
-- 與 ARCHITECTURE §12.1.2 的差異：§12.1.2 寫「AC-37、AC-38 與 AC-34 的 Release 比對屬人工，不列入」，可被讀成 AC-34 整條不列入。本計畫的決定是 **AC-34 列入**，並另外排除 v1.1 新增的 AC-45（見補充需求 S-05）。
+- 與 ARCHITECTURE 一致：v1.1 的 §11、§12.1.2 已改為引用本節（列入 AC-34、AC-21、AC-26，排除 AC-37、AC-38、AC-45），v0.2 註記的差異已消除。
 
-## 14. ARCHITECTURE §12.1 需要補充的事項（請幕僚長轉 Architect；QA 不修改 ARCHITECTURE）
+## 14. ARCHITECTURE §12.1 補充事項（v0.2 提出；**ARCHITECTURE v1.1 已全部採納**，保留作為紀錄）
+
+狀態（v0.4）：S-01～S-09 均已由 ARCHITECTURE v1.1（`5033d3c`）採納：S-01→§12.1.4、S-02→§12.1.8、S-03→§5.1／§11、S-04→§12.1.5、S-05→§11／§12.1.2、S-06→§12.1.5 假 git、S-07→§12.1.3.1、S-08→§12.1.1、S-09→§3。以下為 v0.2 時的原文。
 
 ARCHITECTURE v1.0 的 §12.1 已涵蓋 QA 在 v0.2 草稿中提出的大部分需求：committer 與 author 不同、空 commit、解衝突 merge、octopus、detached HEAD、`Git()` 逃生口、`EXPECTED_SHA`、`RunOpts.Env` 注入設定、原始 bytes 擷取、QA 手寫黃金檔，以及無網路 job（交給 SRE）。剩下的補充如下：
 
@@ -792,3 +794,4 @@ ARCHITECTURE v1.0 的 §12.1 已涵蓋 QA 在 v0.2 草稿中提出的大部分�
 | v0.2 | 2026-11-22 | QA | 交接單 TP-002：依據改為 PRD v1.1（`f5dbf86`）與 ARCHITECTURE v1.0（`915474f`）；fixture 與 E2E 改依 ARCHITECTURE §12.1（取消 shell 腳本與 `tests/fixtures/`，改用 `fixtures_test.go`、`EXPECTED_SHA`、QA 手寫黃金檔、`TestE2E_ACnn`＋TC ID 子測試）；層級代號改為 E2E／P／REL／M；新增 AC-39～AC-45 的 TC 並更新對照表（45 條全覆蓋）；關閉 D-01～D-19、D-22（D-18b、D-20、D-21、D-22b 仍開放）；套用 PRD v1.1 的 NFR 判定條件；新增第 13 節 `ac_list`（排除 AC-37、AC-38、AC-45）、第 14 節 §12.1 補充需求 S-01～S-09；新增 TC-CFG、TC-CLI 等案例 |
 | v0.3 | 2026-11-22 | QA | 交接單 TP-003：依據改為 PRD v1.2（`8b5d669`，AC 未變更）；第 9.3 節加入 NFR 優先度／嚴重度表與 Should 類 NFR 未通過的處理（記缺陷、不阻擋 G3、列給老闆決定）；NFR-06～08 優先度先標「待定」（PRD Q-17）；關閉 D-22b；D-02 改引 PRD v1.2 的量測範圍 |
 | v0.3.1 | 2026-11-22 | QA | 交接單 TP-003 補充：依幕僚長通知，Q-17 決定 NFR-06、07、08 全部為 Should（嚴重度不變），改用 Should 類 NFR 規則（記錄缺陷、不阻擋 G3）；註記 PRD v1.2 文字尚未更新 |
+| v0.4 | 2026-11-22 | QA | 交接單 TP-004：依據改為 PRD v1.3（`0c55219`）、ARCHITECTURE v1.1（`5033d3c`）。TC-AC33-05 改為確定檢查（`--help` 優先於 `--version`，關閉 D-18b）；TC-AC33-04 加 `--bogus --help`；TC-NFR08-01 改用預設隔離的 TEMP 等目錄；§6.2 改用新 `Generate` 簽名、perf 改名一律純改名（改名＋修改仍由 TC-AC08-04 覆蓋）；TC-AC35-04 改用 `SnapshotGitDir`／`DiffGitDir`（含資料夾 mtime）；TC-AC39-03 預期改為 exit 1；Q-17 差異已由 PRD v1.3 消除；§14 標示 S-01～S-09 已採納 |
