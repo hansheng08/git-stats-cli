@@ -1,0 +1,5 @@
+module example.com/fake
+
+go 1.27.0
+
+require github.com/evil/dep v1.0.0
