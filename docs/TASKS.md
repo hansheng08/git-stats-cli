@@ -34,7 +34,7 @@
 | 編號 | 標題 | 對應驗收標準 | 前置任務 | 大小估計 | 狀態 | 分支 | PR 連結 | 受未決事項影響 |
 |---|---|---|---|---|---|---|---|---|
 | T-001 | 專案骨架＋archtest＋lint 設定（[任務單](tasks/T-001.md)） | —（基礎建設；以靜態規則支撐 AC-35、NFR-04/05/08） | —（CI 由 SRE O-001 配合） | L（9 個小檔＋archtest testdata） | 完成 | task/T-001 | https://github.com/hansheng08/git-stats-cli/pull/1 | 問題 #9（CI 先後） |
-| T-002 | `model` 共用型別與 `apperr` 錯誤種類 | AC-10（`DateRange.Contains` 半開區間）、AC-32（`ParseFormat`，區分大小寫） | T-001 | M（4） | 待辦 | task/T-002 | | — |
+| T-002 | `model` 共用型別與 `apperr` 錯誤種類（[任務單](tasks/T-002.md)） | AC-10（`DateRange.Contains` 半開區間）、AC-32（`ParseFormat`，區分大小寫） | T-001 | M（4） | 進行中 | task/T-002 | | — |
 | T-003 | `daterange`：`YYYY-MM-DD` 嚴格解析與本地時區區間 | AC-10、AC-11、AC-13、AC-14、AC-15 | T-002 | S（2） | 待辦 | task/T-003 | | — |
 | T-004 | `stats`：日期篩選、作者合併、計數、排序（純函式） | AC-01、AC-02、AC-03、AC-04、AC-05、AC-06、AC-10、AC-12、AC-18、AC-19 | T-002 | S（2） | 待辦 | task/T-004 | | PoC R-02（僅在效能超標時） |
 | T-005 | `render`：表格輸出（含全形對齊、空資料提示） | AC-17、AC-20、AC-21、AC-30（空資料呈現） | T-002 | L（5，含 go.mod/go.sum 新增 go-runewidth） | 待辦 | task/T-005 | | — |
@@ -222,3 +222,4 @@ PoC 驗證：R-01（git 2.34 旗標相容性、fixture SHA 跨平台一致）、
 | v0.2 | 2026-11-22 | TechLead | 依 TEST_PLAN v0.2（`c6879c5`）：T-016 依 §13 的 42 條 ac_list；新增 T-021 效能測試（問題 #6 結案）；仍未決改為 D-18b、D-20、D-21、D-22b、S-01～S-09。另：反映 G2 決定（Go、PoC 核准、goreleaser 歸 T-017、編號保留與 T-021 起編）；依 PRD v1.1 併入 AC-39～AC-45 並重做覆蓋矩陣（45 條全覆蓋）；依 ARCHITECTURE v1.0 §12.1 更新 E2E 分工、T-001 加 `.gitattributes`、T-007 API；T-020 明列 `.mailmap` 與 `git shortlog` 差異說明；T-001 任務單就緒（進行中）；T-009／T-010 標為等 PoC；問題 #1～#5 結案，新增 #8～#10 |
 | v0.3 | 2026-11-22 | TechLead | 依 ARCHITECTURE v1.1：T-011／T-012 明定 `--help`／`-h`／`--version` 為布林旗標且 `--help` 優先；問題 #8 結案；T-007／T-013／T-021 對齊 v1.1 API 與假 git；S-01～S-10、D-18b、D-22b 移出未決。PRD v1.2／v1.3 檢查：AC 無變動（仍 45 條），覆蓋矩陣不需修改 |
 | v0.4 | 2026-11-22 | TechLead | T-001（含 T-001-fix1）已由老闆合併（PR #1，merge `9212bce`），狀態改為完成並填入 PR 連結 |
+| v0.5 | 2026-11-22 | TechLead | **測試專案於 T-002 後收尾**（Hansheng 決定）：T-002 任務單就緒（狀態改為進行中）；T-003 以後不再執行，列保留不刪，因本表狀態沒有「取消」選項，維持原狀態（待辦）；收尾後進行流程檢討。O-001（CI＋`.claude/settings.json`）已由 Hansheng 合併（PR #2：https://github.com/hansheng08/git-stats-cli/pull/2），狀態為完成；本表沒有 O-001 列（CI 不列入本表，見 §1），所以記在這裡。O-002 不在本 repo 執行，改放到新專案範本 |
