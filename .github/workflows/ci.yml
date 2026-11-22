@@ -1,0 +1,253 @@
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bootstrap notice
+        if: hashFiles('go.mod') == ''
+        run: echo "::warning::go.mod not found; Go steps skipped (bootstrap)"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        if: hashFiles('go.mod') != ''
+        with:
+          version: v2.15.0
+
+  build-test:
+    name: build-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04, macos-latest, windows-latest]
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bootstrap notice
+        if: hashFiles('go.mod') == ''
+        run: echo "::warning::go.mod not found; Go steps skipped (bootstrap)"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+      - name: Versions
+        if: hashFiles('go.mod') != ''
+        run: |
+          go version
+          git --version
+      - name: Build
+        if: hashFiles('go.mod') != ''
+        run: go build ./...
+      - name: Vet
+        if: hashFiles('go.mod') != ''
+        run: go vet ./...
+      - name: Test
+        if: hashFiles('go.mod') != ''
+        run: go test ./...
+
+  build-test-git-min:
+    name: build-test (git-min)
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04
+    timeout-minutes: 15
+    env:
+      GIT_MIN: "2.34"
+    steps:
+      - name: Install git and tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates tar gzip
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - name: Assert minimum git version
+        run: |
+          git --version
+          git --version | grep -E "^git version ${GIT_MIN//./\\.}(\.|$)" || {
+            echo "::error::expected git ${GIT_MIN}.x, got $(git --version)"
+            exit 1
+          }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Mark workspace safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Bootstrap notice
+        if: hashFiles('go.mod') == ''
+        run: echo "::warning::go.mod not found; Go steps skipped (bootstrap)"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build, vet and test as non-root
+        if: hashFiles('go.mod') != ''
+        run: |
+          useradd -m -s /bin/bash tester
+          chown -R tester "$GITHUB_WORKSPACE"
+          su tester -c "export PATH='$PATH' GOTOOLCHAIN=local; cd '$GITHUB_WORKSPACE' && id -un && go version && git --version && go build ./... && go vet ./... && go test ./..."
+
+  offline-test:
+    name: offline-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bootstrap notice
+        if: hashFiles('go.mod') == ''
+        run: echo "::warning::go.mod not found; Go steps skipped (bootstrap)"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+      - name: Download dependencies and warm build cache (online)
+        if: hashFiles('go.mod') != ''
+        run: |
+          go mod download
+          go test -count=1 -run '^$' ./...
+      - name: Prove network is unreachable in namespace
+        if: hashFiles('go.mod') != ''
+        run: |
+          sudo unshare --net -- curl -sS --max-time 5 https://proxy.golang.org >/dev/null && exit 1 || echo offline-ok
+      - name: Test without network (non-root)
+        if: hashFiles('go.mod') != ''
+        run: |
+          sudo unshare --net -- sudo -u "$(id -un)" env "PATH=$PATH" "HOME=$HOME" GOFLAGS=-mod=mod GOPROXY=off GOTOOLCHAIN=local \
+            "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" go test -count=1 ./...
+
+  vulncheck:
+    name: vulncheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bootstrap notice
+        if: hashFiles('go.mod') == ''
+        run: echo "::warning::go.mod not found; Go steps skipped (bootstrap)"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+      - name: govulncheck
+        if: hashFiles('go.mod') != ''
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks (checksum verified)
+        run: |
+          base=https://github.com/gitleaks/gitleaks/releases/download/v8.30.1
+          curl -sSfL -o gitleaks_8.30.1_linux_x64.tar.gz "$base/gitleaks_8.30.1_linux_x64.tar.gz"
+          curl -sSfL -o gitleaks_8.30.1_checksums.txt "$base/gitleaks_8.30.1_checksums.txt"
+          grep ' gitleaks_8.30.1_linux_x64.tar.gz$' gitleaks_8.30.1_checksums.txt | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf gitleaks_8.30.1_linux_x64.tar.gz -C "$RUNNER_TEMP/gitleaks" gitleaks
+      - name: Scan full history
+        run: |
+          "$RUNNER_TEMP/gitleaks/gitleaks" git --redact --no-banner --exit-code 1 .
+
+  scripts-lint:
+    name: scripts-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: No scripts yet
+        if: hashFiles('scripts/install.sh') == '' && hashFiles('scripts/install.ps1') == ''
+        run: echo "::notice::no scripts to lint"
+      - name: shellcheck
+        if: hashFiles('scripts/install.sh') != ''
+        run: |
+          shellcheck --version
+          shellcheck scripts/install.sh
+      - name: PSScriptAnalyzer
+        if: hashFiles('scripts/install.ps1') != ''
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          $r = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Warning,Error
+          $r
+          if ($r) { exit 1 }
+
+  goreleaser-check:
+    name: goreleaser-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: No goreleaser config yet
+        if: hashFiles('.goreleaser.yaml') == ''
+        run: echo "::notice::.goreleaser.yaml not found; skipped"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: hashFiles('.goreleaser.yaml') != '' && hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+      - name: goreleaser check and snapshot build
+        if: hashFiles('.goreleaser.yaml') != '' && hashFiles('go.mod') != ''
+        run: |
+          go install github.com/goreleaser/goreleaser/v2@v2.20.3
+          "$(go env GOPATH)/bin/goreleaser" check
+          "$(go env GOPATH)/bin/goreleaser" release --snapshot --clean
+
+  ci-ok:
+    name: ci-ok
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [lint, build-test, build-test-git-min, offline-test, vulncheck, secret-scan, scripts-lint, goreleaser-check]
+    if: always()
+    steps:
+      - name: Fail if any job failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "::error::one or more required jobs failed or were cancelled"
+          exit 1
+      - name: All good
+        run: echo "all jobs succeeded or were skipped"
