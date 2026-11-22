@@ -4,7 +4,7 @@
 
 | 編號 | 提出者 | 日期 | 標題 | 待決對象 | 何時問 | 狀態 |
 |---|---|---|---|---|---|---|
-| OQ-001 | TechLead | 2026-11-22 | `.golangci.yml` 是否在 `test/**` 排除 gosec G702 | Architect 審查 → 老闆 | G3（PR #1） | 待決 |
+| OQ-001 | TechLead | 2026-11-22 | `.golangci.yml` 是否在 `test/**` 排除 gosec G702 | Architect 審查 → 老闆 | G3（PR #1） | 已結案（2026-11-22） |
 
 ---
 
@@ -28,4 +28,4 @@
 - 產品程式繼續保留 G702，符合 ARCHITECTURE §9 對安全的要求。
 - 做法：Architect 同意後，由 Architect 更新 ARCHITECTURE §11 的規則表，TechLead 再開任務單交給 Claude Code 修改 `.golangci.yml`。不在 T-001 範圍內改。
 
-**決定**：（待老闆在 G3 決定）
+**決定（2026-11-22，老闆，已結案）**：採用選項 1。在 `.golangci.yml` 只對 `test/**` 排除 gosec G702，產品程式（含 `internal/gitlog`）與 `internal/testutil` 仍保留 G702 檢查。實際修改依上方做法：Architect 先更新 ARCHITECTURE §11，再放進建立 `test/**` 程式碼的任務單，由 Claude Code 修改。
