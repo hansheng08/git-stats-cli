@@ -133,7 +133,7 @@ go version && golangci-lint --version && goreleaser --version | grep GitVersion 
 4. **commit 前檢查暫存區**：`git diff --cached --stat`，確認清單只有自己的檔案，再 commit。
 5. **push 明確寫分支**：`git push -u origin task/<編號>`；文件推 main 時（憲章 §4）用 `git push origin HEAD:main`，且推之前 `git diff --stat origin/main..HEAD` 確認只含 `docs/`（與 `CLAUDE.md`）。
 6. **絕不** `git stash`、`git reset`、`git checkout -- <檔>`、`git clean` 別人的變更；絕不 force push。
-7. **收工**：自己的 worktree 可保留重用（下次先 `git pull --ff-only`）。移除 worktree 屬刪除動作，需老闆核准；只用 `git worktree remove ../git-stats-cli-<bot>`（不要用 `rm -rf`）。
+7. **收工**：自己的 worktree 可保留重用（下次先 `git pull --ff-only`）。移除 worktree 屬刪除動作，需Hansheng核准；只用 `git worktree remove ../git-stats-cli-<bot>`（不要用 `rm -rf`）。
 8. 雲端副本的 `git config` 屬共用設定，不要改（例如 `user.name`、`pull.rebase`）。
 
 ### 2.3 共用設定檔的擁有權（依 T-001 任務單）
@@ -149,8 +149,7 @@ go version && golangci-lint --version && goreleaser --version | grep GitVersion 
 | 路徑 | 擁有者 | 分支 |
 |---|---|---|
 | `/workspace/projects/git-stats-cli` | 共用（主倉庫） | main |
-| `/workspace/projects/git-stats-cli-sre` | SRE | task/O-001 |
-| `/workspace/projects/git-stats-cli-sre-main` | SRE | docs/O-001-main（文件推 main 用） |
+| `/workspace/projects/git-stats-cli-sre-main` | SRE | 文件推 main 用（每次從 origin/main 快轉）；舊的 `git-stats-cli-sre`（task/O-001）已於 2026-11-22 移除 |
 
 ## 3. 常見 CI 異常（症狀 → 檢查 → 處理）
 
@@ -166,15 +165,15 @@ go version && golangci-lint --version && goreleaser --version | grep GitVersion 
 | 只有 `build-test (git-min)` 失敗，版本斷言步驟失敗 | job log 中 `git --version` 實際值 vs `GIT_MIN` | ubuntu:22.04 套件版 git 改變或映像下架：回報 SRE 開 O-xxx 調整映像／`GIT_MIN` |
 | 只有 `build-test (git-min)` 失敗，測試失敗 | 是否用了 2.34 不支援的 git 旗標（ARCHITECTURE R-01）；是否為 `dubious ownership`（safe.directory）或以 root 執行造成的權限差異 | 旗標問題＝產品缺陷（AC-39 最低版本不成立），回報 TechLead／Architect；環境問題回報 SRE |
 | `vulncheck` 失敗 | 看輸出中的 `GO-YYYY-NNNN` 編號與受影響套件 | 標準庫漏洞：升級 go.mod 的 Go patch 版；第三方：升級該依賴（新增或升級依賴需 Architect 審查）；回報 SRE 評估風險 |
-| `secret-scan` 失敗 | 輸出（已遮蔽）中的檔案、commit、規則名稱 | **先當作真的外洩**：立刻請老闆撤銷／更換該機密，再移除檔案；已進歷史的需老闆決定是否改寫歷史（force push 需核准）。誤報才加 `.gitleaksignore`（需 SRE 同意） |
+| `secret-scan` 失敗 | 輸出（已遮蔽）中的檔案、commit、規則名稱 | **先當作真的外洩**：立刻請Hansheng撤銷／更換該機密，再移除檔案；已進歷史的需Hansheng決定是否改寫歷史（force push 需核准）。誤報才加 `.gitleaksignore`（需 SRE 同意） |
 | `scripts-lint` 失敗 | shellcheck 的 `SCxxxx` 代碼；PSScriptAnalyzer 規則名 | 修腳本（T-018／T-019）；確定誤報才加行內停用註解並寫理由 |
 | `goreleaser-check` 失敗 | `goreleaser check` 輸出；本機 `goreleaser release --snapshot --clean` 重現 | 修 `.goreleaser.yaml`（T-017） |
 | `ci-ok` 失敗但其他都綠 | 是否有 job 被 cancelled（新推送取消舊的）| 等最新一次執行結果；必要時手動 Re-run |
-| CI 未觸發 | Actions 頁面是否被停用；分支名稱；`.github/workflows/ci.yml` 是否在該分支 | 老闆在 Settings → Actions 啟用 |
+| CI 未觸發 | Actions 頁面是否被停用；分支名稱；`.github/workflows/ci.yml` 是否在該分支 | Hansheng在 Settings → Actions 啟用 |
 | job 卡住或逾時 | 哪個步驟耗時；是否下載依賴失敗 | Re-run；連續失敗回報 SRE |
 
 ## 4. 發佈異常
-發佈與回滾步驟見 `docs/DEPLOY_SPEC.md` §6、§7。處理順序：先止血（把壞版本設為 pre-release、讓 latest 回到前一版，需老闆核准）→ 收集 release workflow log 與使用者回報 → 以 O-xxx 任務單請 Claude Code 分析 → 回報幕僚長 Root Cause、影響範圍、處理建議。
+發佈與回滾步驟見 `docs/DEPLOY_SPEC.md` §6、§7。處理順序：先止血（把壞版本設為 pre-release、讓 latest 回到前一版，需Hansheng核准）→ 收集 release workflow log 與使用者回報 → 以 O-xxx 任務單請 Claude Code 分析 → 回報幕僚長 Root Cause、影響範圍、處理建議。
 
 ## 5. 變更紀錄
 | 版本 | 日期 | 作者 | 內容 |
