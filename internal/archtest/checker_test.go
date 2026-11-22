@@ -173,8 +173,11 @@ func checkFile(rel string, imports []string, modulePath string) []violation {
 	isTest := strings.HasSuffix(rel, "_test.go")
 
 	allowed, listed := allowedProject[dir]
+	if isTestutil(dir) { // internal/testutil/...: listed, may import no project package
+		allowed, listed = nil, true
+	}
 	switch {
-	case !listed && !isTestutil(dir):
+	case !listed:
 		add(fmt.Sprintf(placeholderUnlisted, dir), ruleImportWhitelist)
 	case !isTest && (dir == "internal/archtest" || dir == "test/e2e"):
 		add(fmt.Sprintf(placeholderNonTest, dir), ruleImportWhitelist)
@@ -332,6 +335,7 @@ func TestChecker_Violations(t *testing.T) {
 		{"internal/render/exec.go", "os/exec", ruleOSExec},
 		{"internal/stats/bad.go", "example.com/fake/internal/gitlog", ruleImportWhitelist},
 		{"internal/stats/uses_fixture.go", "example.com/fake/internal/testutil/fixture", ruleTestPathLeak},
+		{"internal/testutil/fixture/uses_model.go", "example.com/fake/internal/model", ruleImportWhitelist},
 		{"internal/unknown/x.go", fmt.Sprintf(placeholderUnlisted, "internal/unknown"), ruleImportWhitelist},
 		{"test/e2e/blackbox_test.go", "example.com/fake/internal/stats", ruleImportWhitelist},
 		{"test/e2e/fakegit/bad.go", "example.com/fake/internal/model", ruleImportWhitelist},
@@ -357,6 +361,9 @@ func TestChecker_Rules(t *testing.T) {
 		{"exec in unit test ok", "internal/stats/a_test.go", []string{"os/exec"}, nil},
 		{"exec in testutil ok", "internal/testutil/fixture/a.go", []string{"os/exec"}, nil},
 		{"exec in fakegit ok", "test/e2e/fakegit/a.go", []string{"os/exec"}, nil},
+		{"testutil non-test imports product", "internal/testutil/fixture/a.go", []string{mod + "/internal/model"}, []violation{{"internal/testutil/fixture/a.go", mod + "/internal/model", ruleImportWhitelist}}},
+		{"testutil non-test stdlib only", "internal/testutil/fixture/a.go", []string{"os/exec", "testing"}, nil},
+		{"testutil external test pkg ok", "internal/testutil/fixture/a_test.go", []string{mod + "/internal/testutil/fixture"}, nil},
 		{"net in non-test", "internal/gitlog/a.go", []string{"net"}, []violation{{"internal/gitlog/a.go", "net", ruleNetwork}}},
 		{"external test pkg ok", "internal/stats/a_test.go", []string{mod + "/internal/stats"}, nil},
 		{"test may import testutil", "internal/stats/a_test.go", []string{mod + "/internal/testutil/fixture"}, nil},
